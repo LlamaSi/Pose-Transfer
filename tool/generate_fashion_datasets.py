@@ -1,7 +1,7 @@
 import os
 
 # path for downloaded fashion images
-root_fashion_dir = ''
+root_fashion_dir = '/home/wenwens/Datasets/DeepFashion/In-shop Clothes Retrieval Benchmark'
 assert len(root_fashion_dir) > 0, 'please give the path of raw deep fashion dataset!'
 
 train_images = []
