@@ -8,8 +8,14 @@ def create_model(opt):
         from .PATN import TransferModel
         model = TransferModel()
 
+    elif opt.model == 'Augment':
+        from .augment_model import AugmentModel
+        model = AugmentModel()
+
     else:
         raise ValueError("Model [%s] not recognized." % opt.model)
+
+        
     model.initialize(opt)
     print("model [%s] was created" % (model.name()))
     return model

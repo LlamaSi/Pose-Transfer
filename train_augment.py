@@ -23,8 +23,8 @@ for epoch in range(opt.epoch_count, opt.niter + opt.niter_decay + 1):
         visualizer.reset()
         total_steps += opt.batchSize
         epoch_iter += opt.batchSize
-        aug_model.forward_aug()
-        aug_model.forward_target()
+        aug_model.forward_aug(data)
+        aug_model.forward_target(data)
 
         if total_steps % opt.display_freq == 0:
             save_result = total_steps % opt.update_html_freq == 0

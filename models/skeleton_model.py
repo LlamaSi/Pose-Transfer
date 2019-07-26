@@ -1,8 +1,7 @@
 import torch
 from torch.autograd import Variable
-from base_model import BaseModel
-import networks
-import losses
+from .base_model import BaseModel
+from . import networks
 
 import torch.nn as nn
 

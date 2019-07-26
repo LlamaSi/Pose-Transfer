@@ -129,8 +129,8 @@ def compute_cordinates(heatmap_avg, paf_avg, th1=0.1, th2=0.05):
                         subset[j][-2] += candidate[partBs[i].astype(int), 2] + connection_all[k][i][2]
                 elif found == 2: # if found 2 and disjoint, merge them
                     j1, j2 = subset_idx
-                    print "found = 2"
-                    # print("found = 2")
+                    # print "found = 2"
+                    print("found = 2")
                     membership = ((subset[j1]>=0).astype(int) + (subset[j2]>=0).astype(int))[:-2]
                     if len(np.nonzero(membership == 2)[0]) == 0: #merge
                         subset[j1][:-2] += (subset[j2][:-2] + 1)
@@ -173,6 +173,32 @@ def compute_cordinates(heatmap_avg, paf_avg, th1=0.1, th2=0.05):
             cordinates.append([X, Y])
     return np.array(cordinates).astype(int)
 
+def compute_image(image):
+    multiplier = [x * boxsize / oriImg.shape[0] for x in scale_search]
+
+    heatmap_avg = np.zeros((oriImg.shape[0], oriImg.shape[1], 19))
+    paf_avg = np.zeros((oriImg.shape[0], oriImg.shape[1], 38))
+
+    for m in range(len(multiplier)):
+        scale = multiplier[m]
+
+        new_size = (np.array(oriImg.shape[:2]) * scale).astype(np.int32)
+        imageToTest = resize(oriImg, new_size, order=3, preserve_range=True)
+        imageToTest_padded = imageToTest[np.newaxis, :, :, :]/255 - 0.5
+
+        output1, output2 = model.predict(imageToTest_padded)
+
+        heatmap = st.resize(output2[0], oriImg.shape[:2], preserve_range=True, order=1)
+        paf = st.resize(output1[0], oriImg.shape[:2], preserve_range=True, order=1)
+        heatmap_avg += heatmap
+        paf_avg += paf
+
+    heatmap_avg /= len(multiplier)
+
+    pose_cords = compute_cordinates(heatmap_avg, paf_avg)
+
+    return pose_cords
+    
 # input_folder = './results/fashion_PATN/test_latest/images_crop/'
 # output_path = './results/fashion_PATN/test_latest/pckh.csv'
 

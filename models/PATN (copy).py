@@ -16,10 +16,6 @@ import torchvision.models as models
 import torchvision.transforms as transforms
 import torch.nn as nn
 
-from torch.autograd import Variable
-
-# from tool.compute_coordinates import compute_image
-
 class TransferModel(BaseModel):
     def name(self):
         return 'TransferModel'
@@ -110,7 +106,7 @@ class TransferModel(BaseModel):
             self.input_BP1 = self.input_BP1.cuda()
             self.input_P2 = self.input_P2.cuda()
             self.input_BP2 = self.input_BP2.cuda()
-            
+
     def forward(self):
         G_input = [self.input_P1,
                    torch.cat((self.input_BP1, self.input_BP2), 1)]
@@ -129,7 +125,7 @@ class TransferModel(BaseModel):
         return self.image_paths
 
 
-    def backward_G(self, infer=False):
+    def backward_G(self):
         if self.opt.with_D_PB:
             pred_fake_PB = self.netD_PB(torch.cat((self.fake_p2, self.input_BP2), 1))
             self.loss_G_GAN_PB = self.criterionGAN(pred_fake_PB, True)
@@ -139,17 +135,13 @@ class TransferModel(BaseModel):
             self.loss_G_GAN_PP = self.criterionGAN(pred_fake_PP, True)
 
         # L1 loss
-
-        if self.opt.L1_type != 'None':
-            if self.opt.L1_type == 'l1_plus_perL1' :
-                losses = self.criterionL1(self.fake_p2, self.input_P2)
-                self.loss_G_L1 = losses[0]
-                self.loss_originL1 = losses[1].item()
-                self.loss_perceptual = losses[2].item()
-            else:
-                self.loss_G_L1 = self.criterionL1(self.fake_p2, self.input_P2) * self.opt.lambda_A
+        if self.opt.L1_type == 'l1_plus_perL1' :
+            losses = self.criterionL1(self.fake_p2, self.input_P2)
+            self.loss_G_L1 = losses[0]
+            self.loss_originL1 = losses[1].item()
+            self.loss_perceptual = losses[2].item()
         else:
-            self.loss_G_L1 = Variable(torch.cuda.FloatTensor([0]))
+            self.loss_G_L1 = self.criterionL1(self.fake_p2, self.input_P2) * self.opt.lambda_A
 
 
         pair_L1loss = self.loss_G_L1
@@ -167,14 +159,12 @@ class TransferModel(BaseModel):
         else:
             pair_loss = pair_L1loss
 
-        if not infer:
-            pair_loss.backward()
+        pair_loss.backward()
 
         self.pair_L1loss = pair_L1loss.item()
         if self.opt.with_D_PB or self.opt.with_D_PP:
             self.pair_GANloss = pair_GANloss.item()
-        if infer:
-            return pair_loss
+
 
     def backward_D_basic(self, netD, real, fake):
         # Real
@@ -206,13 +196,12 @@ class TransferModel(BaseModel):
         self.loss_D_PP = loss_D_PP.item()
 
 
-    def optimize_parameters(self, forward=True):
+    def optimize_parameters(self):
         # forward
-        if forward:
-            self.forward()
+        self.forward()
 
         self.optimizer_G.zero_grad()
-        self.backward_G(False)
+        self.backward_G()
         self.optimizer_G.step()
 
         # D_P
@@ -232,10 +221,10 @@ class TransferModel(BaseModel):
 
     def get_current_errors(self):
         ret_errors = OrderedDict([ ('pair_L1loss', self.pair_L1loss)])
-        # if self.opt.with_D_PP:
-        #     ret_errors['D_PP'] = self.loss_D_PP
-        # if self.opt.with_D_PB:
-        #     ret_errors['D_PB'] = self.loss_D_PB
+        if self.opt.with_D_PP:
+            ret_errors['D_PP'] = self.loss_D_PP
+        if self.opt.with_D_PB:
+            ret_errors['D_PB'] = self.loss_D_PB
         if self.opt.with_D_PB or self.opt.with_D_PP:
             ret_errors['pair_GANloss'] = self.pair_GANloss
 

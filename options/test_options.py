@@ -10,5 +10,6 @@ class TestOptions(BaseOptions):
         self.parser.add_argument('--phase', type=str, default='test', help='train, val, test, etc')
         self.parser.add_argument('--which_epoch', type=str, default='latest', help='which epoch to load? set to latest to use latest cached model')
         self.parser.add_argument('--how_many', type=int, default=200, help='how many test images to run')
-
+        self.parser.add_argument('--model', type=str, default='cycle_gan',
+                                 help='chooses which model to use. cycle_gan, pix2pix, test')
         self.isTrain = False
