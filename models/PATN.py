@@ -29,6 +29,7 @@ centermap[:, :, 0] = center_map
 centermap = torch.from_numpy(centermap.transpose((2, 0, 1)))
 torch.unsqueeze(centermap, 0)
 centermap = torch.stack([centermap, centermap], dim=0)
+centermap = torch.cat([centermap, centermap], dim=0)
 print("centermap.shape={}".format(centermap.shape))
 
 
@@ -192,7 +193,7 @@ class TransferModel(BaseModel):
 
         if self.opt.pose_loss:
             t = Variable(self.ds_BP2[:, :15], requires_grad=False)
-            pl = self.pose_loss(torch.clamp(self.heat6, min=0), t)
+            pl = self.pose_loss(torch.clamp(self.heat6, min=0, max=1), t)
 
         if not infer:
             pair_loss += pl

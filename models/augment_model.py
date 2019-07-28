@@ -11,6 +11,7 @@ import itertools
 from losses.L1_plus_perceptualLoss import L1_plus_perceptualLoss
 import numpy as np
 
+from . import xyz_to_anglelimb
 import pdb
 
 class AugmentModel(BaseModel):
@@ -54,8 +55,17 @@ class AugmentModel(BaseModel):
 
     def forward_aug(self, input):
         # update main model
-        aug_input = torch.cat((input['BP1'].cuda(), input['BP2'].cuda()), 1)
-        self.input_BP_aug = self.skeleton_net(aug_input)
+        scale = 256
+        aug_input = torch.cat((input['BP1_3d'].float().cuda(), input['BP2_3d'].float().cuda()), 1)
+        offset, limbs = scale *input['offset'].cuda(), scale * input['limbs'].cuda()
+
+        BP_aug_3d = self.skeleton_net(aug_input)
+        BP_aug_xyz = xyz_to_anglelimb.anglelimbtoxyz(offset, BP_aug_3d, limbs)
+        BP_aug_hm = torch.zeros([BP_aug_xyz.size(0), BP_aug_xyz.size(1), 2]).cuda()
+        BP_aug_hm[:,:,0] = torch.clamp(BP_aug_xyz[:,:,0], min=0, max=256)
+        BP_aug_hm[:,:,1] = torch.clamp(BP_aug_xyz[:,:,1], min=0, max=176)
+
+        self.input_BP_aug = xyz_to_anglelimb.cords_to_map(BP_aug_hm, [256, 176])
 
         main_input = input.copy()
         main_input['BP2'] = self.input_BP_aug
