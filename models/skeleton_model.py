@@ -15,8 +15,8 @@ class Skeleton_Model(BaseModel):
         super(Skeleton_Model, self).__init__()
         BaseModel.initialize(self, opt)
         self.main = nn.Sequential(
-            nn.Linear(84, 42),
-            nn.Sigmoid()
+            nn.Linear(84, 42)
+            # nn.Sigmoid()
         )
 
     def forward(self, input):
