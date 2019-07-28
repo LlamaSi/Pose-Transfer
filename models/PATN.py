@@ -18,7 +18,8 @@ import torch.nn as nn
 
 from torch.autograd import Variable
 
-# from tool.compute_coordinates import compute_image
+from .openpose.rtpose_vgg import get_model
+from .pose_model import get_pose
 
 class TransferModel(BaseModel):
     def name(self):
@@ -31,6 +32,15 @@ class TransferModel(BaseModel):
         size = opt.fineSize
 
         input_nc = [opt.P_input_nc, opt.BP_input_nc+opt.BP_input_nc]
+
+        weight_name = './checkpoints/openpose/pose_model.pth'
+
+        self.net_Pose = get_model('vgg19')     
+        self.net_Pose.load_state_dict(torch.load(weight_name))
+        self.net_Pose = torch.nn.DataParallel(self.net_Pose).cuda()
+        self.net_Pose.float()
+        self.net_Pose.eval()
+
         self.netG = networks.define_G(input_nc, opt.P_input_nc,
                                         opt.ngf, opt.which_model_netG, opt.norm, not opt.no_dropout, opt.init_type, self.gpu_ids,
                                         n_downsampling=opt.G_n_downsampling)
@@ -116,6 +126,9 @@ class TransferModel(BaseModel):
                    torch.cat((self.input_BP1, self.input_BP2), 1)]
         self.fake_p2 = self.netG(G_input)
 
+        # \wenwen{change the batch}
+        # self.fake_p2_pose = get_pose(self.fake_p2, self.net_Pose)
+        # self.sk_losses = self.criterionL1(self.fake_p2_pose, self.input_BP2)
 
     def test(self):
         with torch.no_grad():
@@ -150,7 +163,7 @@ class TransferModel(BaseModel):
                 self.loss_G_L1 = self.criterionL1(self.fake_p2, self.input_P2) * self.opt.lambda_A
         else:
             self.loss_G_L1 = Variable(torch.cuda.FloatTensor([0]))
-
+            # self.loss_G_L1 += self.sk_losses
 
         pair_L1loss = self.loss_G_L1
         if self.opt.with_D_PB:

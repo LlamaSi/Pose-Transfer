@@ -32,7 +32,7 @@ class AugmentModel(BaseModel):
 
         if not self.isTrain or opt.continue_train:
             which_epoch = opt.which_epoch
-            self.load_network(self.skeleton_net, 'netSK', which_epoch)
+            # self.load_network(self.skeleton_net, 'netSK', which_epoch)
 
         if self.isTrain:
             self.skeleton_lr = opt.lr2

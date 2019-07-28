@@ -1,4 +1,4 @@
-import pose_utils
+from . import pose_utils
 import os
 import numpy as np
 
