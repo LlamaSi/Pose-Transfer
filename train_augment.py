@@ -3,6 +3,7 @@ from options.augment_options import AugmentOptions
 from data.data_loader import CreateDataLoader
 from models.models import create_model
 from util.visualizer import Visualizer
+import pdb
 
 opt = AugmentOptions().parse()
 data_loader = CreateDataLoader(opt)
@@ -23,6 +24,7 @@ for epoch in range(opt.epoch_count, opt.niter + opt.niter_decay + 1):
         visualizer.reset()
         total_steps += opt.batchSize
         epoch_iter += opt.batchSize
+
         aug_model.forward_aug(data)
         aug_model.forward_target(data)
 

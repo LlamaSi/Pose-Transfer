@@ -17,9 +17,20 @@ import torchvision.transforms as transforms
 import torch.nn as nn
 
 from torch.autograd import Variable
+from . import cpm_model
+from . import cpm_test
 
-from .openpose.rtpose_vgg import get_model
-from .pose_model import get_pose
+center = [128, 88]
+centermap = np.zeros((256, 176, 1), dtype=np.float32)
+center_map = cpm_test.guassian_kernel(size_h=256, size_w=176, center_x=center[0], center_y=center[1], sigma=3)
+center_map[center_map > 1] = 1
+center_map[center_map < 0.0099] = 0
+centermap[:, :, 0] = center_map
+centermap = torch.from_numpy(centermap.transpose((2, 0, 1)))
+torch.unsqueeze(centermap, 0)
+centermap = torch.stack([centermap, centermap], dim=0)
+print("centermap.shape={}".format(centermap.shape))
+
 
 class TransferModel(BaseModel):
     def name(self):
@@ -31,15 +42,11 @@ class TransferModel(BaseModel):
         nb = opt.batchSize
         size = opt.fineSize
 
+        self.opt = opt
+        cpm_model_path = '/home/wenwens/Documents/HumanPose/Pose-Transfer/checkpoints/cpm/cpm_latest.pth.tar'
+        self.cpm_model = cpm_test.construct_model(cpm_model_path)
+
         input_nc = [opt.P_input_nc, opt.BP_input_nc+opt.BP_input_nc]
-
-        weight_name = './checkpoints/openpose/pose_model.pth'
-
-        self.net_Pose = get_model('vgg19')     
-        self.net_Pose.load_state_dict(torch.load(weight_name))
-        self.net_Pose = torch.nn.DataParallel(self.net_Pose).cuda()
-        self.net_Pose.float()
-        self.net_Pose.eval()
 
         self.netG = networks.define_G(input_nc, opt.P_input_nc,
                                         opt.ngf, opt.which_model_netG, opt.norm, not opt.no_dropout, opt.init_type, self.gpu_ids,
@@ -78,6 +85,8 @@ class TransferModel(BaseModel):
             # define loss functions
             self.criterionGAN = networks.GANLoss(use_lsgan=not opt.no_lsgan, tensor=self.Tensor)
 
+            if opt.pose_loss:
+                self.pose_loss = torch.nn.BCELoss()
             if opt.L1_type == 'origin':
                 self.criterionL1 = torch.nn.L1Loss()
             elif opt.L1_type == 'l1_plus_perL1':
@@ -125,10 +134,12 @@ class TransferModel(BaseModel):
         G_input = [self.input_P1,
                    torch.cat((self.input_BP1, self.input_BP2), 1)]
         self.fake_p2 = self.netG(G_input)
+        self.cpm_model.eval()
+        self.ds_BP2 = F.upsample(self.input_BP2, scale_factor=0.125)
+        self.ds_BP2 = self.ds_BP2.flatten(start_dim=2)
+        _, _, _, _, _, heat6 = self.cpm_model(self.fake_p2, centermap)
+        self.heat6 = heat6.flatten(start_dim=2)
 
-        # \wenwen{change the batch}
-        # self.fake_p2_pose = get_pose(self.fake_p2, self.net_Pose)
-        # self.sk_losses = self.criterionL1(self.fake_p2_pose, self.input_BP2)
 
     def test(self):
         with torch.no_grad():
@@ -163,7 +174,6 @@ class TransferModel(BaseModel):
                 self.loss_G_L1 = self.criterionL1(self.fake_p2, self.input_P2) * self.opt.lambda_A
         else:
             self.loss_G_L1 = Variable(torch.cuda.FloatTensor([0]))
-            # self.loss_G_L1 += self.sk_losses
 
         pair_L1loss = self.loss_G_L1
         if self.opt.with_D_PB:
@@ -180,7 +190,12 @@ class TransferModel(BaseModel):
         else:
             pair_loss = pair_L1loss
 
+        if self.opt.pose_loss:
+            t = Variable(self.ds_BP2[:, :15], requires_grad=False)
+            pl = self.pose_loss(torch.clamp(self.heat6, min=0), t)
+
         if not infer:
+            pair_loss += pl
             pair_loss.backward()
 
         self.pair_L1loss = pair_L1loss.item()

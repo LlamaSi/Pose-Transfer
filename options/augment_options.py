@@ -35,6 +35,7 @@ class AugmentOptions(BaseOptions):
         self.parser.add_argument('--perceptual_layers', type=int, default=3, help='index of vgg layer for extracting perceptual features.')
         self.parser.add_argument('--percep_is_l1', type=int, default=1, help='type of perceptual loss: l1 or l2')
         self.parser.add_argument('--no_dropout_D', action='store_true', help='no dropout for the discriminator')
+        self.parser.add_argument('--pose_loss', action='store_true', help='no dropout for the discriminator')
         self.parser.add_argument('--DG_ratio', type=int, default=1, help='how many times for D training after training G once')
         self.parser.add_argument('--model', type=str, default='Augment',
                                  help='chooses which model to use. cycle_gan, pix2pix, test')
