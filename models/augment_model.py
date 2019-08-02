@@ -89,8 +89,9 @@ class AugmentModel(BaseModel):
         self.main_model.opt.with_D_PB = 0
         self.main_model.opt.L1_type = 'None'
 
-        self.main_model.optimize_parameters(False)
-        # pdb.set_trace()
+        # update main model
+        self.main_model.optimize_parameters()
+        
         self.fake_aug = self.main_model.fake_p2[0].cpu().detach().numpy().transpose(1,2,0).copy()
 
         return self.main_model.fake_p2
@@ -112,16 +113,8 @@ class AugmentModel(BaseModel):
         pair_loss = self.main_model.backward_G(infer=True)
         pair_loss.backward()
 
-        # print(self.skeleton_lr )
-        # for w in list(self.skeleton_net.parameters()):
-        #     print('grad')
-        #     print(w.grad)
-
-        # for w in list(self.skeleton_net.parameters()):
-        #     print('weight')
-        #     print(w)
         self.optimizer_SK.step()
-        # self.optimizer_SK.zero_grad()
+        self.optimizer_SK.zero_grad()
 
         return fake_b
 

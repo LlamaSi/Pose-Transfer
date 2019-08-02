@@ -110,6 +110,18 @@ def test_example(model, img_path, center):
 
     draw_paint(img_path, kpts)
 
+def get_centermap(n, w,h):
+    center = [w//2, h//2]
+    centermap = np.zeros((w, h, 1), dtype=np.float32)
+    center_map = guassian_kernel(size_h=w, size_w=h, center_x=center[0], center_y=center[1], sigma=3)
+    center_map[center_map > 1] = 1
+    center_map[center_map < 0.0099] = 0
+    centermap[:, :, 0] = center_map
+    centermap = torch.from_numpy(centermap.transpose((2, 0, 1)))
+    torch.unsqueeze(centermap, 0)
+    centermap = centermap.repeat(n,1,1,1)
+
+    return centermap
 
 
 if __name__ == '__main__':

@@ -22,19 +22,6 @@ from . import cpm_test
 
 import pdb
 
-center = [128, 88]
-centermap = np.zeros((256, 176, 1), dtype=np.float32)
-center_map = cpm_test.guassian_kernel(size_h=256, size_w=176, center_x=center[0], center_y=center[1], sigma=3)
-center_map[center_map > 1] = 1
-center_map[center_map < 0.0099] = 0
-centermap[:, :, 0] = center_map
-centermap = torch.from_numpy(centermap.transpose((2, 0, 1)))
-torch.unsqueeze(centermap, 0)
-centermap = torch.stack([centermap, centermap], dim=0)
-centermap = torch.cat([centermap, centermap], dim=0)
-print("centermap.shape={}".format(centermap.shape))
-
-
 class TransferModel(BaseModel):
     def name(self):
         return 'TransferModel'
@@ -46,6 +33,7 @@ class TransferModel(BaseModel):
         size = opt.fineSize
 
         self.opt = opt
+        self.centermap = cpm_test.get_centermap(nb, 256, 176)
         cpm_model_path = '/home/wenwens/Documents/HumanPose/Pose-Transfer/checkpoints/cpm/cpm_latest.pth.tar'
         self.cpm_model = cpm_test.construct_model(cpm_model_path)
 
@@ -141,10 +129,10 @@ class TransferModel(BaseModel):
         # self.ds_BP2 = F.upsample(self.input_BP2, scale_factor=0.125)
         self.ds_BP2 = torch.nn.MaxPool2d(8,8)(self.input_BP2)
         self.ds_BP2 = self.ds_BP2.flatten(start_dim=2)
-        _, _, _, _, _, heat6 = self.cpm_model(self.fake_p2, centermap)
+        _, _, _, _, _, heat6 = self.cpm_model(self.fake_p2, self.centermap)
         heat6 = heat6[:,1:]
         cores = [10,9,8,11,12,13,4,3,2,5,6,7,1]
-        # pdb.set_trace()
+        
         self.heat6 = torch.zeros(heat6.shape).cuda()
         for i in range(13):
             self.heat6[:,cores[i]] = heat6[:,i]
@@ -161,59 +149,6 @@ class TransferModel(BaseModel):
     # get image paths
     def get_image_paths(self):
         return self.image_paths
-
-
-    def backward_G(self, infer=False):
-        if self.opt.with_D_PB:
-            pred_fake_PB = self.netD_PB(torch.cat((self.fake_p2, self.input_BP2), 1))
-            self.loss_G_GAN_PB = self.criterionGAN(pred_fake_PB, True)
-
-        if self.opt.with_D_PP:
-            pred_fake_PP = self.netD_PP(torch.cat((self.fake_p2, self.input_P1), 1))
-            self.loss_G_GAN_PP = self.criterionGAN(pred_fake_PP, True)
-
-        # L1 loss
-
-        if self.opt.L1_type != 'None':
-            if self.opt.L1_type == 'l1_plus_perL1' :
-                losses = self.criterionL1(self.fake_p2, self.input_P2)
-                self.loss_G_L1 = losses[0]
-                self.loss_originL1 = losses[1].item()
-                self.loss_perceptual = losses[2].item()
-            else:
-                self.loss_G_L1 = self.criterionL1(self.fake_p2, self.input_P2) * self.opt.lambda_A
-        else:
-            self.loss_G_L1 = Variable(torch.cuda.FloatTensor([0]))
-
-        pair_L1loss = self.loss_G_L1
-        if self.opt.with_D_PB:
-            pair_GANloss = self.loss_G_GAN_PB * self.opt.lambda_GAN
-            if self.opt.with_D_PP:
-                pair_GANloss += self.loss_G_GAN_PP * self.opt.lambda_GAN
-                pair_GANloss = pair_GANloss / 2
-        else:
-            if self.opt.with_D_PP:
-                pair_GANloss = self.loss_G_GAN_PP * self.opt.lambda_GAN
-
-        if self.opt.with_D_PB or self.opt.with_D_PP:
-            pair_loss = pair_L1loss + pair_GANloss
-        else:
-            pair_loss = pair_L1loss
-
-        if self.opt.pose_loss:
-            t = Variable(self.ds_BP2[:, 1:14], requires_grad=False)
-            
-            pl = self.pose_loss(torch.clamp(self.heat6[:,1:], min=0, max=1), t)
-
-        if not infer:
-            pair_loss += pl
-            pair_loss.backward()
-
-        self.pair_L1loss = pair_L1loss.item()
-        if self.opt.with_D_PB or self.opt.with_D_PP:
-            self.pair_GANloss = pair_GANloss.item()
-        if infer:
-            return pair_loss
 
     def backward_D_basic(self, netD, real, fake):
         # Real
@@ -244,19 +179,73 @@ class TransferModel(BaseModel):
         loss_D_PP = self.backward_D_basic(self.netD_PP, real_PP, fake_PP)
         self.loss_D_PP = loss_D_PP.item()
 
+    def backward_G(self, infer=False):
+        if self.opt.with_D_PB:
+            pred_fake_PB = self.netD_PB(torch.cat((self.fake_p2, self.input_BP2), 1))
+            self.loss_G_GAN_PB = self.criterionGAN(pred_fake_PB, True)
 
-    def optimize_parameters(self, forward=True):
-        # forward
-        if forward:
-            self.forward()
+        if self.opt.with_D_PP:
+            pred_fake_PP = self.netD_PP(torch.cat((self.fake_p2, self.input_P1), 1))
+            self.loss_G_GAN_PP = self.criterionGAN(pred_fake_PP, True)
 
+        # L1 loss
+        if self.opt.L1_type != 'None':
+            # if we have target results, then we can add L1 loss
+            # either peceptual of normal L1
+            if self.opt.L1_type == 'l1_plus_perL1' :
+                losses = self.criterionL1(self.fake_p2, self.input_P2)
+                self.loss_G_L1 = losses[0]
+                self.loss_originL1 = losses[1].item()
+                self.loss_perceptual = losses[2].item()
+            else:
+                self.loss_G_L1 = self.criterionL1(self.fake_p2, self.input_P2) * self.opt.lambda_A
+        else:
+            # otherwise L1 loss is zero
+            self.loss_G_L1 = Variable(torch.cuda.FloatTensor([0]))
+
+        pair_L1loss = self.loss_G_L1
+        if self.opt.with_D_PB:
+            pair_GANloss = self.loss_G_GAN_PB * self.opt.lambda_GAN
+            if self.opt.with_D_PP:
+                pair_GANloss += self.loss_G_GAN_PP * self.opt.lambda_GAN
+                pair_GANloss = pair_GANloss / 2
+        else:
+            if self.opt.with_D_PP:
+                pair_GANloss = self.loss_G_GAN_PP * self.opt.lambda_GAN
+
+        if self.opt.with_D_PB or self.opt.with_D_PP:
+            pair_loss = pair_L1loss + pair_GANloss
+        else:
+            pair_loss = pair_L1loss
+
+        if self.opt.pose_loss:
+            # if compute pose loss
+            t = Variable(self.ds_BP2[:, 1:14], requires_grad=False)
+            pl = self.pose_loss(torch.clamp(self.heat6[:,1:], min=0, max=1), t)*10
+            self.pl = pl
+
+        # just to assign the result for print error
+        self.pair_L1loss = pair_L1loss.item()
+
+        if self.opt.with_D_PB or self.opt.with_D_PP:
+            self.pair_GANloss = pair_GANloss.item()
+
+        if not infer:
+            # if want to update G
+            # add pose loss
+            # pair loss is the total loss
+            pair_loss += pl
+            pair_loss.backward()
+        else:
+            # currently no pose loss for target
+            return pair_loss
+
+    def optimize_parameters(self):
         self.optimizer_G.zero_grad()
-        self.backward_G(False)
-        # for w in list(self.netG.parameters()):
-        #     print('grad')
-        #     print(w.grad)
+        self.backward_G(infer=False)
         self.optimizer_G.step()
 
+        # choose not to update discriminator for now
         # D_P
         # if self.opt.with_D_PP:
         #     for i in range(self.opt.DG_ratio):
@@ -284,6 +273,7 @@ class TransferModel(BaseModel):
         if self.opt.L1_type == 'l1_plus_perL1':
             ret_errors['origin_L1'] = self.loss_originL1
             ret_errors['perceptual'] = self.loss_perceptual
+        ret_errors['pose_loss'] = self.pl
 
         return ret_errors
 
