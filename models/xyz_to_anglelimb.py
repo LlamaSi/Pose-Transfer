@@ -1,9 +1,7 @@
 import numpy as np
 import torch
 
-mpii_edges = [[0, 1], [1, 2], [2, 6], [6, 3], [3, 4], [4, 5], 
-                [10, 11], [11, 12], [12, 8], [8, 13], [13, 14], [14, 15], 
-              [6, 8], [8, 9]]
+
 
 joints = [[0,1], [1, 2], [2, 3], [3, 4], [4, 5], [6, 7], [7, 8], [8, 9],
             [9, 10], [10, 11], [12, 13], [2, 12]]
@@ -31,7 +29,7 @@ def joint_angles(prediction_3d):
 
 def absolute_angles(prediction_3d):
     absolute_angles = np.zeros([14, 3])
-    offset = prediction_3d[0]
+    offset = prediction_3d[8] ## offset !!!!!!!
     limbs = np.zeros([14, 1])
     for i in range(len(mpii_edges)):
         i1, i2 = mpii_edges[i]
@@ -50,35 +48,67 @@ def anglelimbtoxyz(offset, absolute_angles, limbs):
     direction = limbs * norm_direction
 
     res_3d[:, 0] = offset
-    res_3d[:, 1] = res_3d[:, 0] + direction[:, 0]
-    res_3d[:, 2] = res_3d[:, 1] + direction[:, 1]
-    res_3d[:, 6] = res_3d[:, 2] + direction[:, 2]
-    res_3d[:, 3] = res_3d[:, 6] + direction[:, 3]
-    res_3d[:, 4] = res_3d[:, 3] + direction[:, 4]
-    res_3d[:, 5] = res_3d[:, 4] + direction[:, 5]
-    res_3d[:, 8] = res_3d[:, 6] + direction[:, 12]
-    res_3d[:, 9] = res_3d[:, 8] + direction[:, 13]
-    res_3d[:, 13] = res_3d[:, 8] + direction[:, 9]
-    res_3d[:, 14] = res_3d[:, 13] + direction[:, 10]
-    res_3d[:, 15] = res_3d[:, 14] + direction[:, 11]
-    res_3d[:, 12] = res_3d[:, 8] - direction[:, 8]
-    res_3d[:, 11] = res_3d[:, 12] - direction[:, 7]
+    res_3d[:, 1] = res_3d[:, 0] - direction[:, 0]
+    res_3d[:, 2] = res_3d[:, 1] - direction[:, 1]
+    res_3d[:, 6] = res_3d[:, 2] - direction[:, 2]
+    res_3d[:, 3] = res_3d[:, 6] - direction[:, 3]
+    res_3d[:, 4] = res_3d[:, 3] - direction[:, 4]
+    res_3d[:, 5] = res_3d[:, 4] - direction[:, 5]
+    res_3d[:, 8] = res_3d[:, 6] - direction[:, 12]
+    res_3d[:, 9] = res_3d[:, 8] - direction[:, 13]
+    res_3d[:, 13] = res_3d[:, 8] - direction[:, 9]
+    res_3d[:, 14] = res_3d[:, 13] - direction[:, 10]
+    res_3d[:, 15] = res_3d[:, 14] - direction[:, 11]
+    res_3d[:, 12] = res_3d[:, 8] + direction[:, 8]
+    res_3d[:, 11] = res_3d[:, 12] + direction[:, 7]
     res_3d[:, 10] = res_3d[:, 11] + direction[:, 6]
 
     return res_3d
 
+mpii_edges = [[0, 1], [1, 2], [2, 6], [6, 3], [3, 4], [4, 5], 
+                [10, 11], [11, 12], [12, 8], [8, 13], [13, 14], [14, 15], 
+              [6, 8], [8, 9]]
+
+def anglelimbtoxyz2(offset, absolute_angles, limbs):
+    limbs = limbs.float()
+    res_3d = torch.zeros([4, 16, 3]).cuda()
+    
+    norm_direction = torch.cos(absolute_angles)
+    limbs = limbs.repeat(1,1,3)
+    direction = limbs * norm_direction
+
+    res_3d[:, 8] = offset
+    res_3d[:, 13] = res_3d[:, 8] - direction[:, 9]
+    res_3d[:, 14] = res_3d[:, 13] - direction[:, 10]
+    res_3d[:, 15] = res_3d[:, 14] - direction[:, 11]
+    res_3d[:, 12] = res_3d[:, 8] + direction[:, 8]
+    res_3d[:, 11] = res_3d[:, 12] + direction[:, 7]
+    res_3d[:, 10] = res_3d[:, 11] + direction[:, 6]
+    res_3d[:, 9] = res_3d[:, 8] - direction[:, 13]
+    res_3d[:, 6] = res_3d[:, 8] + direction[:, 12]
+    res_3d[:, 3] = res_3d[:, 6] - direction[:, 3]
+    res_3d[:, 4] = res_3d[:, 3] - direction[:, 4]
+    res_3d[:, 5] = res_3d[:, 4] - direction[:, 5]
+    res_3d[:, 2] = res_3d[:, 6] + direction[:, 2]
+    res_3d[:, 1] = res_3d[:, 2] + direction[:, 1]
+    res_3d[:, 0] = res_3d[:, 1] + direction[:, 0]
+
+
+
+    return res_3d
+
+corres = [10,9,8,11,12,13,17,17,1,17,4,3,2,5,6,7]
+
 def cords_to_map(cords, img_size, sigma=6):
     result = torch.zeros([cords.size(0), 18, 256, 176])
     for i, points in enumerate(cords):
-        for j, point in enumerate(points):
-            # import pdb
-            # pdb.set_trace()
-            # result[i, p[0], p[1]] = 1
+        for j in range(16):
+            co = corres[j]
+            point = points[j]
             xx, yy = torch.meshgrid(torch.arange(img_size[0], dtype=torch.int32).cuda(), torch.arange(img_size[1],dtype=torch.int32).cuda())
             xx = xx.float()
             yy = yy.float()
             res = torch.exp(-((yy - point[0]) ** 2 + (xx - point[1]) ** 2) / (2 * sigma ** 2))
-            # result[..., i] = np.where(((yy - point[0]) ** 2 + (xx - point[1]) ** 2) < (sigma ** 2), 1, 0)
-            result[i, j] = res
+            result[i, co] = res
 
     return result

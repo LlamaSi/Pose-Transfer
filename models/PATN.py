@@ -20,6 +20,8 @@ from torch.autograd import Variable
 from . import cpm_model
 from . import cpm_test
 
+import pdb
+
 center = [128, 88]
 centermap = np.zeros((256, 176, 1), dtype=np.float32)
 center_map = cpm_test.guassian_kernel(size_h=256, size_w=176, center_x=center[0], center_y=center[1], sigma=3)
@@ -87,7 +89,7 @@ class TransferModel(BaseModel):
             self.criterionGAN = networks.GANLoss(use_lsgan=not opt.no_lsgan, tensor=self.Tensor)
 
             if opt.pose_loss:
-                self.pose_loss = torch.nn.BCELoss()
+                self.pose_loss = torch.nn.BCELoss(size_average=True)
             if opt.L1_type == 'origin':
                 self.criterionL1 = torch.nn.L1Loss()
             elif opt.L1_type == 'l1_plus_perL1':
@@ -136,11 +138,18 @@ class TransferModel(BaseModel):
                    torch.cat((self.input_BP1, self.input_BP2), 1)]
         self.fake_p2 = self.netG(G_input)
         self.cpm_model.eval()
-        self.ds_BP2 = F.upsample(self.input_BP2, scale_factor=0.125)
+        # self.ds_BP2 = F.upsample(self.input_BP2, scale_factor=0.125)
+        self.ds_BP2 = torch.nn.MaxPool2d(8,8)(self.input_BP2)
         self.ds_BP2 = self.ds_BP2.flatten(start_dim=2)
         _, _, _, _, _, heat6 = self.cpm_model(self.fake_p2, centermap)
-        self.heat6 = heat6.flatten(start_dim=2)
+        heat6 = heat6[:,1:]
+        cores = [10,9,8,11,12,13,4,3,2,5,6,7,1]
+        # pdb.set_trace()
+        self.heat6 = torch.zeros(heat6.shape).cuda()
+        for i in range(13):
+            self.heat6[:,cores[i]] = heat6[:,i]
 
+        self.heat6 = self.heat6.flatten(start_dim=2)
 
     def test(self):
         with torch.no_grad():
@@ -192,8 +201,9 @@ class TransferModel(BaseModel):
             pair_loss = pair_L1loss
 
         if self.opt.pose_loss:
-            t = Variable(self.ds_BP2[:, :15], requires_grad=False)
-            pl = self.pose_loss(torch.clamp(self.heat6, min=0, max=1), t)
+            t = Variable(self.ds_BP2[:, 1:14], requires_grad=False)
+            
+            pl = self.pose_loss(torch.clamp(self.heat6[:,1:], min=0, max=1), t)
 
         if not infer:
             pair_loss += pl
@@ -242,21 +252,24 @@ class TransferModel(BaseModel):
 
         self.optimizer_G.zero_grad()
         self.backward_G(False)
+        # for w in list(self.netG.parameters()):
+        #     print('grad')
+        #     print(w.grad)
         self.optimizer_G.step()
 
         # D_P
-        if self.opt.with_D_PP:
-            for i in range(self.opt.DG_ratio):
-                self.optimizer_D_PP.zero_grad()
-                self.backward_D_PP()
-                self.optimizer_D_PP.step()
+        # if self.opt.with_D_PP:
+        #     for i in range(self.opt.DG_ratio):
+        #         self.optimizer_D_PP.zero_grad()
+        #         self.backward_D_PP()
+        #         self.optimizer_D_PP.step()
 
-        # D_BP
-        if self.opt.with_D_PB:
-            for i in range(self.opt.DG_ratio):
-                self.optimizer_D_PB.zero_grad()
-                self.backward_D_PB()
-                self.optimizer_D_PB.step()
+        # # D_BP
+        # if self.opt.with_D_PB:
+        #     for i in range(self.opt.DG_ratio):
+        #         self.optimizer_D_PB.zero_grad()
+        #         self.backward_D_PB()
+        #         self.optimizer_D_PB.step()
 
 
     def get_current_errors(self):
