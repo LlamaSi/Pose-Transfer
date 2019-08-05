@@ -71,7 +71,8 @@ mpii_edges = [[0, 1], [1, 2], [2, 6], [6, 3], [3, 4], [4, 5],
 
 def anglelimbtoxyz2(offset, absolute_angles, limbs):
     limbs = limbs.float()
-    res_3d = torch.zeros([4, 16, 3]).cuda()
+    b = limbs.shape[0]
+    res_3d = torch.zeros([b, 16, 3]).cuda()
     
     norm_direction = torch.cos(absolute_angles)
     limbs = limbs.repeat(1,1,3)

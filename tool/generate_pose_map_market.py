@@ -7,7 +7,7 @@ MISSING_VALUE = -1
 
 img_dir  = 'market_data/train' #raw image path
 annotations_file = 'market_data/market-annotation-train.csv' #pose annotation path
-save_path = 'market_data/trainK' #path to store pose maps
+save_path = 'market_data/train2K' #path to store pose maps
 
 def load_pose_cords_from_strings(y_str, x_str):
     y_cords = json.loads(y_str)
@@ -20,13 +20,13 @@ def cords_to_map(cords, img_size, sigma=6):
         if point[0] == MISSING_VALUE or point[1] == MISSING_VALUE:
             continue
         xx, yy = np.meshgrid(np.arange(img_size[1]), np.arange(img_size[0]))
-        result[..., i] = np.exp(-((yy - point[0]) ** 2 + (xx - point[1]) ** 2) / (2 * sigma ** 2))
+        result[..., i] = np.exp(-((yy - 2*point[0]) ** 2 + (xx - 2*point[1]) ** 2) / (2 * sigma ** 2))
     return result
 
 def compute_pose(image_dir, annotations_file, savePath):
     annotations_file = pd.read_csv(annotations_file, sep=':')
     annotations_file = annotations_file.set_index('name')
-    image_size = (128, 64)
+    image_size = (256, 176)
     cnt = len(annotations_file)
     for i in range(cnt):
         print('processing %d / %d ...' %(i, cnt))

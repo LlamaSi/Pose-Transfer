@@ -1,14 +1,54 @@
 import os
-from inception_score import get_inception_score
+# from inception_score import get_inception_score
 
 from skimage.io import imread, imsave
 from skimage.measure import compare_ssim
+from skimage.draw import circle, line_aa, polygon
 
 import numpy as np
 import pandas as pd
 
 from tqdm import tqdm
 import re
+
+MISSING_VALUE = -2
+
+def produce_ma_mask(kp_array, img_size, point_radius=4):
+    from skimage.morphology import dilation, erosion, square
+    mask = np.zeros(shape=img_size, dtype=bool)
+    limbs = [[2,3], [2,6], [3,4], [4,5], [6,7], [7,8], [2,9], [9,10],
+              [10,11], [2,12], [12,13], [13,14], [2,1], [1,15], [15,17],
+               [1,16], [16,18], [2,17], [2,18], [9,12], [12,6], [9,3], [17,18]]
+    limbs = np.array(limbs) - 1
+    for f, t in limbs:
+        from_missing = kp_array[f][0] == MISSING_VALUE or kp_array[f][1] == MISSING_VALUE
+        to_missing = kp_array[t][0] == MISSING_VALUE or kp_array[t][1] == MISSING_VALUE
+        if from_missing or to_missing:
+            continue
+
+        norm_vec = kp_array[f] - kp_array[t]
+        norm_vec = np.array([-norm_vec[1], norm_vec[0]])
+        norm_vec = point_radius * norm_vec / np.linalg.norm(norm_vec)
+
+
+        vetexes = np.array([
+            kp_array[f] + norm_vec,
+            kp_array[f] - norm_vec,
+            kp_array[t] - norm_vec,
+            kp_array[t] + norm_vec
+        ])
+        yy, xx = polygon(vetexes[:, 0], vetexes[:, 1], shape=img_size)
+        mask[yy, xx] = True
+
+    for i, joint in enumerate(kp_array):
+        if kp_array[i][0] == MISSING_VALUE or kp_array[i][1] == MISSING_VALUE:
+            continue
+        yy, xx = circle(joint[0], joint[1], radius=point_radius, shape=img_size)
+        mask[yy, xx] = True
+
+    mask = dilation(mask, square(5))
+    mask = erosion(mask, square(5))
+    return mask
 
 def l1_score(generated_images, reference_images):
     score_list = []
@@ -37,16 +77,16 @@ def save_images(input_images, target_images, generated_images, names, output_fol
 
 
 def create_masked_image(names, images, annotation_file):
-    import pose_utils
+    from pose_utils import load_pose_cords_from_strings
     masked_images = []
     df = pd.read_csv(annotation_file, sep=':')
     for name, image in zip(names, images):
         to = name[1]
         ano_to = df[df['name'] == to].iloc[0]
 
-        kp_to = pose_utils.load_pose_cords_from_strings(ano_to['keypoints_y'], ano_to['keypoints_x'])
+        kp_to = load_pose_cords_from_strings(ano_to['keypoints_y'], ano_to['keypoints_x'])
 
-        mask = pose_utils.produce_ma_mask(kp_to, image.shape[:2])
+        mask = produce_ma_mask(2*kp_to, image.shape[:2])
         masked_images.append(image * mask[..., np.newaxis])
 
     return masked_images
@@ -89,24 +129,24 @@ def test(generated_images_dir, annotations_file_test):
     print ("Loading images...")
     input_images, target_images, generated_images, names = load_generated_images(generated_images_dir)
 
-    print ("Compute inception score...")
-    inception_score = get_inception_score(generated_images)
-    print ("Inception score %s" % inception_score[0])
+    # print ("Compute inception score...")
+    # inception_score = get_inception_score(generated_images)
+    # print ("Inception score %s" % inception_score[0])
 
 
     print ("Compute structured similarity score (SSIM)...")
     structured_score = ssim_score(generated_images, target_images)
     print ("SSIM score %s" % structured_score)
 
-    print ("Compute l1 score...")
-    norm_score = l1_score(generated_images, target_images)
-    print ("L1 score %s" % norm_score)
+    # print ("Compute l1 score...")
+    # norm_score = l1_score(generated_images, target_images)
+    # print ("L1 score %s" % norm_score)
 
-    print ("Compute masked inception score...")
+    # print ("Compute masked inception score...")
     generated_images_masked = create_masked_image(names, generated_images, annotations_file_test)
     reference_images_masked = create_masked_image(names, target_images, annotations_file_test)
-    inception_score_masked = get_inception_score(generated_images_masked)
-    print ("Inception score masked %s" % inception_score_masked[0])
+    # inception_score_masked = get_inception_score(generated_images_masked)
+    # print ("Inception score masked %s" % inception_score_masked[0])
 
     print ("Compute masked SSIM...")
     structured_score_masked = ssim_score(generated_images_masked, reference_images_masked)
@@ -119,7 +159,12 @@ def test(generated_images_dir, annotations_file_test):
 
 
 if __name__ == "__main__":
-    generated_images_dir = '/home/wenwens/Documents/HumanPose/Preprocess/Pose-Transfer/results/fashion_PATN_true/test_latest/images'
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('dir')
+    args = parser.parse_args()
+    generated_images_dir = args.dir
+    # generated_images_dir = '/home/wenwens/Documents/HumanPose/Preprocess/Pose-Transfer/results/201908021506/test_latest/images'
     annotations_file_test = 'market_data/market-annotation-test.csv'
 
     test(generated_images_dir, annotations_file_test)

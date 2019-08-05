@@ -129,6 +129,7 @@ class TransferModel(BaseModel):
         # self.ds_BP2 = F.upsample(self.input_BP2, scale_factor=0.125)
         self.ds_BP2 = torch.nn.MaxPool2d(8,8)(self.input_BP2)
         self.ds_BP2 = self.ds_BP2.flatten(start_dim=2)
+        # pdb.set_trace()
         _, _, _, _, _, heat6 = self.cpm_model(self.fake_p2, self.centermap)
         heat6 = heat6[:,1:]
         cores = [10,9,8,11,12,13,4,3,2,5,6,7,1]
@@ -144,6 +145,20 @@ class TransferModel(BaseModel):
             G_input = [self.input_P1,
                        torch.cat((self.input_BP1, self.input_BP2), 1)]
             self.fake_p2 = self.netG(G_input)
+        # self.cpm_model.eval()
+        # # self.ds_BP2 = F.upsample(self.input_BP2, scale_factor=0.125)
+        # self.ds_BP2 = torch.nn.MaxPool2d(8,8)(self.input_BP2)
+        # self.ds_BP2 = self.ds_BP2.flatten(start_dim=2)
+        # # pdb.set_trace()
+        # _, _, _, _, _, heat6 = self.cpm_model(self.fake_p2, self.centermap)
+        # heat6 = heat6[:,1:]
+        # cores = [10,9,8,11,12,13,4,3,2,5,6,7,1]
+        
+        # self.heat6 = torch.zeros(heat6.shape).cuda()
+        # for i in range(13):
+        #     self.heat6[:,cores[i]] = heat6[:,i]
+
+        # self.heat6 = self.heat6.flatten(start_dim=2)
 
 
     # get image paths
@@ -221,7 +236,8 @@ class TransferModel(BaseModel):
         if self.opt.pose_loss:
             # if compute pose loss
             t = Variable(self.ds_BP2[:, 1:14], requires_grad=False)
-            pl = self.pose_loss(torch.clamp(self.heat6[:,1:], min=0, max=1), t)*10
+            # lambda_pose
+            pl = self.pose_loss(torch.clamp(self.heat6[:,1:], min=0, max=1), t)*50
             self.pl = pl
 
         # just to assign the result for print error
@@ -238,6 +254,7 @@ class TransferModel(BaseModel):
             pair_loss.backward()
         else:
             # currently no pose loss for target
+            # pair_loss += pl
             return pair_loss
 
     def optimize_parameters(self):
