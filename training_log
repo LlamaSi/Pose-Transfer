@@ -1,0 +1,90 @@
+2019-08-02 10:28AM 
+--lr 0 --lr2 0.0002 --continue_train --discriminator update
+
+forward_aug: 
+self.main_model.opt.with_D_PP = 1
+self.main_model.opt.with_D_PB = 0
+self.main_model.opt.L1_type = 'None'	
+
+forward_target:
+self.main_model.opt.with_D_PP = 1
+self.main_model.opt.with_D_PB = 1
+self.main_model.opt.L1_type = 'l1_plus_perL1'
+
+2019-08-02 12:01PM
+--lr 0.0000002 --lr2 0.0002 --continue_train --discriminator not update
+
+forward_aug: 
+self.main_model.opt.with_D_PP = 1
+self.main_model.opt.with_D_PB = 0
+self.main_model.opt.L1_type = 'None'	
+
+forward_target:
+self.main_model.opt.with_D_PP = 1
+self.main_model.opt.with_D_PB = 1
+self.main_model.opt.L1_type = 'l1_plus_perL1'
+
+no zero_grad 
+-------------------------------------
+now check all loss 
+
+2019-08-02 15:06PM
+--lr 0.0000002 --lr2 0.002 --continue_train --discriminator not update
+
+forward_aug: 
+self.main_model.opt.with_D_PP = 1
+self.main_model.opt.with_D_PB = 0
+self.main_model.opt.L1_type = 'None'	
+
+forward_target:
+self.main_model.opt.with_D_PP = 1
+self.main_model.opt.with_D_PB = 1
+self.main_model.opt.L1_type = 'l1_plus_perL1'
+
+2019-08-02 15:06PM
+--lr 0.0000002 --lr2 0.002 --continue_train --discriminator not update top.csv
+batch_size = 6
+
+forward_aug: 
+self.main_model.opt.with_D_PP = 1
+self.main_model.opt.with_D_PB = 0
+self.main_model.opt.L1_type = 'None'	
+
+forward_target:
+self.main_model.opt.with_D_PP = 1
+self.main_model.opt.with_D_PB = 1
+self.main_model.opt.L1_type = 'l1_plus_perL1'
+
+2019-08-03 00:11PM
+--lr default --lr2 0.001 --continue_train --discriminator update top.csv
+batch_size = 6
+
+forward_aug: 
+self.main_model.opt.with_D_PP = 1
+self.main_model.opt.with_D_PB = 0
+self.main_model.opt.L1_type = 'None'	
+
+forward_target:
+self.main_model.opt.with_D_PP = 1
+self.main_model.opt.with_D_PB = 1
+self.main_model.opt.L1_type = 'l1_plus_perL1'
+
+2019-08-04 12:30 PM
+--lr 0.00005 --lr2 0.0002 --continue_train --discriminator update top.csv
+batch_size = 6
+
+forward_aug: 
+self.main_model.opt.with_D_PP = 1
+self.main_model.opt.with_D_PB = 0
+self.main_model.opt.L1_type = 'None'	
+
+forward_target:
+self.main_model.opt.with_D_PP = 1
+self.main_model.opt.with_D_PB = 1
+self.main_model.opt.L1_type = 'l1_plus_perL1'
+
+201908021506_ongen
+--lr 0.0000002 --lr2 0.002 --continue_train --discriminator not update
+----
+no pose loss on target, no lr2 lr -default
+--continue_train --discriminator not update large train
