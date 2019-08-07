@@ -8,7 +8,6 @@ import random
 import pandas as pd
 import numpy as np
 import torch
-from models.xyz_to_anglelimb import absolute_angles
 from . import debugger
 
 class KeyDataset(BaseDataset):
@@ -17,7 +16,6 @@ class KeyDataset(BaseDataset):
         self.root = opt.dataroot
         self.dir_P = os.path.join(opt.dataroot, opt.phase) #person images
         self.dir_K = os.path.join(opt.dataroot, opt.phase + 'K') #keypoints
-        self.dir_3d = os.path.join(opt.dataroot, opt.phase + '_3d_full')
 
         self.init_categories(opt.pairLst)
         self.transform = get_transform(opt)
@@ -51,25 +49,11 @@ class KeyDataset(BaseDataset):
         P2_path = os.path.join(self.dir_P, P2_name) # person 2
         BP2_path = os.path.join(self.dir_K, P2_name + '.npy') # bone of person 2
 
-        # person 1 & 2 3d pose(x,y,z)
-        P13d_path = os.path.join(self.dir_3d, P1_name.replace('.jpg', '.npy')) # person 1
-        P23d_path = os.path.join(self.dir_3d, P2_name.replace('.jpg', '.npy')) # person 2
-
-        BP1_3d_dict, BP2_3d_dict = np.load(P13d_path, allow_pickle=True).item(), np.load(P23d_path, allow_pickle=True).item()
-        BP1_3d, bias1 = BP1_3d_dict['pred_3d'], BP1_3d_dict['bias']
-        BP2_3d, bias2 = BP2_3d_dict['pred_3d'], BP2_3d_dict['bias']
-
         P1_img = Image.open(P1_path).convert('RGB')
         P2_img = Image.open(P2_path).convert('RGB')
 
-        BP1_3d, BP2_3d = self.rescale3d(BP1_3d, bias1), self.rescale3d(BP2_3d, bias2)
-
-        absolute_angles1, limbs1, offset = absolute_angles(BP1_3d)
-        absolute_angles2, _, _ = absolute_angles(BP2_3d)
-
         BP1_img = np.load(BP1_path) # h, w, c
         BP2_img = np.load(BP2_path) 
-
 
         # use flip
         if self.opt.phase == 'train' and self.opt.use_flip:
@@ -108,13 +92,12 @@ class KeyDataset(BaseDataset):
             P2 = self.transform(P2_img)
 
         return {'P1': P1, 'BP1': BP1, 'P2': P2, 'BP2': BP2,
-                'P1_path': P1_name, 'P2_path': P2_name, 'BP1_3d': BP1_3d, 'BP2_3d': BP2_3d, 'BP1_3d_angle': absolute_angles1, 'BP2_3d_angle': absolute_angles2,
-                'limbs': limbs1, 'offset':offset}
+                'P1_path': P1_name, 'P2_path': P2_name}
                 
 
     def __len__(self):
         if self.opt.phase == 'train':
-            return 4002
+            return 4000
         elif self.opt.phase == 'test':
             return self.size
 

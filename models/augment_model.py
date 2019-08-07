@@ -12,6 +12,7 @@ from losses.L1_plus_perceptualLoss import L1_plus_perceptualLoss
 import numpy as np
 
 from . import xyz_to_anglelimb
+from .vae_skeleton_model import Vae_Skeleton_Model
 import matplotlib.pyplot as plt
 import pdb
 
@@ -25,16 +26,11 @@ class AugmentModel(BaseModel):
         # create and initialize network
         opt.model = 'PATN'
         self.main_model = create_model(opt)
-        from .inter_skeleton_model import InterSkeleton_Model
-        self.skeleton_net = InterSkeleton_Model(opt).cuda()
+        self.skeleton_net = Vae_Skeleton_Model(opt).cuda()
 
         print('---------- Networks initialized -------------')
         networks.print_network(self.skeleton_net)
         print('-----------------------------------------------')
-
-        if not self.isTrain or opt.continue_train:
-            which_epoch = opt.which_epoch
-            # self.load_network(self.skeleton_net, 'netSK', which_epoch)
 
         if self.isTrain:
             self.skeleton_lr = opt.lr2
@@ -48,6 +44,7 @@ class AugmentModel(BaseModel):
                 # initialize optimizers
                 self.optimizer_SK = torch.optim.Adam(self.skeleton_net.parameters(), lr=self.skeleton_lr , betas=(opt.beta2, 0.999))
 
+                # need to check whether parameter contains abundant ones
                 self.optimizers.append(self.optimizer_SK)
                 self.optimizers = self.optimizers + self.main_model.optimizers
 
@@ -56,25 +53,11 @@ class AugmentModel(BaseModel):
 
     def forward_aug(self, input):
         # update main model
-        # the order of joints for a 3d is angles
-        aug_input = torch.stack((input['BP1_3d_angle'].float().cuda(), input['BP2_3d_angle'].float().cuda()), 1)
-        offset, limbs = input['offset'].cuda(), input['limbs'].cuda()
 
+        # still need to preprocess, ie mean std
         BP_aug_3d = torch.squeeze(self.skeleton_net(aug_input))
-        # BP_aug_3d = aug_input[:,0]
-        BP_aug_xyz = xyz_to_anglelimb.anglelimbtoxyz2(offset, BP_aug_3d, limbs)
-        BP_aug_hm = torch.zeros([BP_aug_xyz.size(0), BP_aug_xyz.size(1), 2]).cuda()
-        BP_aug_hm[:,:,0] = torch.clamp(BP_aug_xyz[:,:,0], min=0, max=176)
-        BP_aug_hm[:,:,1] = torch.clamp(BP_aug_xyz[:,:,1], min=0, max=256)
 
-        self.input_BP_aug = xyz_to_anglelimb.cords_to_map(BP_aug_hm, [256, 176])
-
-        # for exp on top
-        self.input_BP_aug[:,9:11] = input['BP2'][:,9:11] # = 0
-        self.input_BP_aug[:,12:14] = input['BP2'][:,12:14] # = 0
-
-        # missing 0, 14:17
-        self.input_BP_aug[:,0] = input['BP2'][:,0]
+        # may add normal face based on the spline direction later
         self.input_BP_aug[:,14:] = input['BP2'][:,14:]
 
         main_input = input.copy()

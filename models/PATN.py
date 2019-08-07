@@ -131,12 +131,14 @@ class TransferModel(BaseModel):
         self.ds_BP2 = self.ds_BP2.flatten(start_dim=2)
         # pdb.set_trace()
         _, _, _, _, _, heat6 = self.cpm_model(self.fake_p2, self.centermap)
-        heat6 = heat6[:,1:]
+        heat6 = heat6[:,1:] # 0 - 14
         cores = [10,9,8,11,12,13,4,3,2,5,6,7,1]
         
         self.heat6 = torch.zeros(heat6.shape).cuda()
-        for i in range(13):
+        for i in range(12):
             self.heat6[:,cores[i]] = heat6[:,i]
+
+        self.heat6 = self.heat6[:,:-1]
 
         self.heat6 = self.heat6.flatten(start_dim=2)
 
@@ -235,9 +237,9 @@ class TransferModel(BaseModel):
 
         if self.opt.pose_loss:
             # if compute pose loss
-            t = Variable(self.ds_BP2[:, 1:14], requires_grad=False)
+            t = Variable(self.ds_BP2[:, 2:14], requires_grad=False)
             # lambda_pose
-            pl = self.pose_loss(torch.clamp(self.heat6[:,1:], min=0, max=1), t)*50
+            pl = self.pose_loss(torch.clamp(self.heat6[:,1:], min=0, max=1), t)*0.1
             self.pl = pl
 
         # just to assign the result for print error
@@ -250,7 +252,8 @@ class TransferModel(BaseModel):
             # if want to update G
             # add pose loss
             # pair loss is the total loss
-            pair_loss += pl
+            # pair_loss += pl
+            pair_loss = pl
             pair_loss.backward()
         else:
             # currently no pose loss for target

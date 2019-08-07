@@ -1,5 +1,4 @@
 import torch
-from torch.autograd import Variable
 from .base_model import BaseModel
 from . import networks
 
