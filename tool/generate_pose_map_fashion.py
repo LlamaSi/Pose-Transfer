@@ -21,7 +21,6 @@ def cords_to_map(cords, img_size, sigma=6):
             continue
         xx, yy = np.meshgrid(np.arange(img_size[1]), np.arange(img_size[0]))
         result[..., i] = np.exp(-((yy - point[0]) ** 2 + (xx - point[1]) ** 2) / (2 * sigma ** 2))
-        # result[..., i] = np.where(((yy - point[0]) ** 2 + (xx - point[1]) ** 2) < (sigma ** 2), 1, 0)
     return result
 
 def compute_pose(image_dir, annotations_file, savePath, sigma=6):
@@ -33,7 +32,6 @@ def compute_pose(image_dir, annotations_file, savePath, sigma=6):
         print('processing %d / %d ...' %(i, cnt))
         row = annotations_file.iloc[i]
         name = row.name
-        print(savePath, name)
         file_name = os.path.join(savePath, name + '.npy')
         kp_array = load_pose_cords_from_strings(row.keypoints_y, row.keypoints_x)
         pose = cords_to_map(kp_array, image_size, sigma)

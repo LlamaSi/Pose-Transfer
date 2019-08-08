@@ -16,6 +16,19 @@ from .vae_skeleton_model import Vae_Skeleton_Model
 import matplotlib.pyplot as plt
 import pdb
 
+def cords_to_map(cords, img_size, sigma=6):
+    result = torch.zeros([cords.size(0), 18, 256, 176])
+    for i, points in enumerate(cords):
+        for j in range(14):
+            point = points[j]
+            xx, yy = torch.meshgrid(torch.arange(img_size[0], dtype=torch.int32).cuda(), torch.arange(img_size[1],dtype=torch.int32).cuda())
+            xx = xx.float()
+            yy = yy.float()
+            res = torch.exp(-((yy - point[0]) ** 2 + (xx - point[1]) ** 2) / (2 * sigma ** 2))
+            result[i, j] = res
+
+    return result
+
 class AugmentModel(BaseModel):
     def name(self):
         return 'AugmentModel'
@@ -42,7 +55,7 @@ class AugmentModel(BaseModel):
                 self.schedulers = []
 
                 # initialize optimizers
-                self.optimizer_SK = torch.optim.Adam(self.skeleton_net.parameters(), lr=self.skeleton_lr , betas=(opt.beta2, 0.999))
+                self.optimizer_SK = torch.optim.Adam([self.skeleton_net.alpha_m, self.skeleton_net.alpha_v], lr=self.skeleton_lr , betas=(opt.beta2, 0.999))
 
                 # need to check whether parameter contains abundant ones
                 self.optimizers.append(self.optimizer_SK)
@@ -52,10 +65,17 @@ class AugmentModel(BaseModel):
                     self.schedulers.append(networks.get_scheduler(optimizer, opt))
 
     def forward_aug(self, input):
-        # update main model
-
+        input1, input2 = input['K1'].squeeze(1), input['K2'].squeeze(1)
         # still need to preprocess, ie mean std
-        BP_aug_3d = torch.squeeze(self.skeleton_net(aug_input))
+        input1 = input1.repeat((1,1,16)).cuda().float()
+        input2 = input2.repeat((1,1,16)).cuda().float()
+        # check output range
+
+        BP_aug_kpts = self.skeleton_net(input1, input2)
+
+        pdb.set_trace()
+        # no hip
+        self.input_BP_aug = cords_to_map(BP_aug_kpts, (256, 176), sigma=3*8)
 
         # may add normal face based on the spline direction later
         self.input_BP_aug[:,14:] = input['BP2'][:,14:]
@@ -74,7 +94,7 @@ class AugmentModel(BaseModel):
 
         # update main model
         self.main_model.optimize_parameters()
-        
+
         self.fake_aug = self.main_model.fake_p2[0].cpu().detach().numpy().transpose(1,2,0).copy()
 
         return self.main_model.fake_p2

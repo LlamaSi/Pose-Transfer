@@ -16,6 +16,7 @@ class KeyDataset(BaseDataset):
         self.root = opt.dataroot
         self.dir_P = os.path.join(opt.dataroot, opt.phase) #person images
         self.dir_K = os.path.join(opt.dataroot, opt.phase + 'K') #keypoints
+        self.dir_json = os.path.join(opt.dataroot, opt.phase + '_kjson') #keypoints
 
         self.init_categories(opt.pairLst)
         self.transform = get_transform(opt)
@@ -44,10 +45,12 @@ class KeyDataset(BaseDataset):
         P1_name, P2_name = self.pairs[index]
         P1_path = os.path.join(self.dir_P, P1_name) # person 1
         BP1_path = os.path.join(self.dir_K, P1_name + '.npy') # bone of person 1
-        
-        # person 2 and its bone
+        K1_path = os.path.join(self.dir_json, P1_name + '.npy')
+
+        # person 2 and its bone 
         P2_path = os.path.join(self.dir_P, P2_name) # person 2
         BP2_path = os.path.join(self.dir_K, P2_name + '.npy') # bone of person 2
+        K2_path = os.path.join(self.dir_json, P2_name + '.npy')
 
         P1_img = Image.open(P1_path).convert('RGB')
         P2_img = Image.open(P2_path).convert('RGB')
@@ -91,8 +94,10 @@ class KeyDataset(BaseDataset):
             P1 = self.transform(P1_img)
             P2 = self.transform(P2_img)
 
+        K1, K2 = np.load(K1_path), np.load(K2_path)
+
         return {'P1': P1, 'BP1': BP1, 'P2': P2, 'BP2': BP2,
-                'P1_path': P1_name, 'P2_path': P2_name}
+                'P1_path': P1_name, 'P2_path': P2_name, 'K1': K1, 'K2': K2}
                 
 
     def __len__(self):

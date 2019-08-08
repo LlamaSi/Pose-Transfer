@@ -31,8 +31,7 @@ for epoch in range(opt.epoch_count, opt.niter + opt.niter_decay + 1):
         if total_steps % opt.display_freq == 0:
             save_result = total_steps % opt.update_html_freq == 0
             visualizer.display_current_results(aug_model.get_current_visuals(), epoch, save_result)
-            for param in aug_model.skeleton_net.parameters():
-                print(param.data)
+            print(aug_model.skeleton_net.alpha_m, aug_model.skeleton_net.alpha_v)
 
         if total_steps % opt.print_freq == 0:
             errors = aug_model.get_current_errors()
