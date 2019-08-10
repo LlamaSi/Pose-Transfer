@@ -1,7 +1,12 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import pdb
 
+class MyUpsample2(nn.Module):
+    def forward(self, x):
+        # pdb.set_trace()
+        return x[:, :, :, None].expand(-1, -1, -1, 2).reshape(x.size(0), x.size(1), x.size(2)*2)
 
 class Encoder(nn.Module):
     def __init__(self, channels, kernel_size=8, global_pool=None, convpool=None, compress=False):
@@ -54,12 +59,12 @@ class Decoder(nn.Module):
         acti = nn.LeakyReLU(0.2)
 
         for i in range(len(channels) - 1):
-            model.append(nn.Upsample(scale_factor=2, mode='nearest'))
+            model.append(MyUpsample2())
             model.append(nn.ReflectionPad1d(pad))
             model.append(nn.Conv1d(channels[i], channels[i + 1],
                                             kernel_size=kernel_size, stride=1))
             if i == 0 or i == 1:
-                model.append(nn.Dropout(p=0.2))
+                model.append(nn.Dropout(p=0)) #0.2
             if not i == len(channels) - 2:
                 model.append(acti)          # whether to add tanh a last?
                 #model.append(nn.Dropout(p=0.2))

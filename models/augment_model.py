@@ -12,19 +12,22 @@ from losses.L1_plus_perceptualLoss import L1_plus_perceptualLoss
 import numpy as np
 
 from . import xyz_to_anglelimb
-from .vae_skeleton_model import Vae_Skeleton_Model
+from .vae_skeleton_model import Vae_Skeleton_Model, trans_motion_inv, normalize_motion_inv
 import matplotlib.pyplot as plt
 import pdb
 
 def cords_to_map(cords, img_size, sigma=6):
+    MISSING_VALUE = -1
     result = torch.zeros([cords.size(0), 18, 256, 176])
     for i, points in enumerate(cords):
-        for j in range(14):
+        for j in range(18):
             point = points[j]
+            if point[0] == MISSING_VALUE or point[1] == MISSING_VALUE:
+                continue
             xx, yy = torch.meshgrid(torch.arange(img_size[0], dtype=torch.int32).cuda(), torch.arange(img_size[1],dtype=torch.int32).cuda())
             xx = xx.float()
             yy = yy.float()
-            res = torch.exp(-((yy - point[0]) ** 2 + (xx - point[1]) ** 2) / (2 * sigma ** 2))
+            res = torch.exp(-((yy - point[1]) ** 2 + (xx - point[0]) ** 2) / (2 * sigma ** 2))
             result[i, j] = res
 
     return result
@@ -38,6 +41,7 @@ class AugmentModel(BaseModel):
 
         # create and initialize network
         opt.model = 'PATN'
+        self.opt = opt
         self.main_model = create_model(opt)
         self.skeleton_net = Vae_Skeleton_Model(opt).cuda()
 
@@ -65,20 +69,33 @@ class AugmentModel(BaseModel):
                     self.schedulers.append(networks.get_scheduler(optimizer, opt))
 
     def forward_aug(self, input):
+        # with mid hip at 8
         input1, input2 = input['K1'].squeeze(1), input['K2'].squeeze(1)
+        F2 = input['F2'].cuda().float()
         # still need to preprocess, ie mean std
         input1 = input1.repeat((1,1,16)).cuda().float()
         input2 = input2.repeat((1,1,16)).cuda().float()
         # check output range
+        center = input['C2'].cuda().float()
+        # 14, no mid hip
+        BP_aug_kpts = self.skeleton_net(input1, input2, center)
+        
+        nose = F2[:,0]
+        aug_nose = BP_aug_kpts[:,0]
+        eye_ears = F2[:,-4:]
+        
+        aug_eye_ears = eye_ears - nose + aug_nose
 
-        BP_aug_kpts = self.skeleton_net(input1, input2)
+        BP_aug_kpts_full = torch.cat([BP_aug_kpts, aug_eye_ears], 1)
 
-        pdb.set_trace()
-        # no hip
-        self.input_BP_aug = cords_to_map(BP_aug_kpts, (256, 176), sigma=3*8)
+        self.input_BP_aug = cords_to_map(BP_aug_kpts_full, (256, 176), sigma=3)
 
         # may add normal face based on the spline direction later
-        self.input_BP_aug[:,14:] = input['BP2'][:,14:]
+        # self.input_BP_aug[:,14:] = input['BP2'][:,14:]
+        for i in range(self.opt.batchSize):
+            for j in range(4):
+                if eye_ears[i,j,0] == -1 or eye_ears[i,j,1] == -1:
+                    self.input_BP_aug[i, j+14] = 0
 
         main_input = input.copy()
         main_input['BP2'] = self.input_BP_aug
@@ -139,3 +156,13 @@ class AugmentModel(BaseModel):
     def save(self, label):
         self.save_network(self.skeleton_net, 'netSK', label, self.gpu_ids)
         self.main_model.save(label)
+
+
+# input22 = input2.view((input2.shape[0], 15, 2, -1))
+# # check if still need mapping
+# # post process
+
+# BP_aug_kpts = trans_motion_inv(normalize_motion_inv(input22, self.skeleton_net.mean_pose, 
+#     self.skeleton_net.std_pose), sx=center[:,0:1,0], sy=center[:,1:2,0]) / 2
+# # print(out.shape) # (b, 14, 2)
+        

@@ -16,7 +16,7 @@ class KeyDataset(BaseDataset):
         self.root = opt.dataroot
         self.dir_P = os.path.join(opt.dataroot, opt.phase) #person images
         self.dir_K = os.path.join(opt.dataroot, opt.phase + 'K') #keypoints
-        self.dir_json = os.path.join(opt.dataroot, opt.phase + '_kjson') #keypoints
+        self.dir_json = os.path.join(opt.dataroot, opt.phase + '_kjson_zeronorm_10000') #keypoints
 
         self.init_categories(opt.pairLst)
         self.transform = get_transform(opt)
@@ -94,10 +94,14 @@ class KeyDataset(BaseDataset):
             P1 = self.transform(P1_img)
             P2 = self.transform(P2_img)
 
-        K1, K2 = np.load(K1_path), np.load(K2_path)
+        Kd1, Kd2 = np.load(K1_path,allow_pickle=True).item(), np.load(K2_path,allow_pickle=True).item()
+        K1, K2 = Kd1['input1'], Kd2['input1']
+        C1, C2 = Kd1['centers'], Kd2['centers']
+        F1, F2 = Kd1['face'], Kd2['face']
 
         return {'P1': P1, 'BP1': BP1, 'P2': P2, 'BP2': BP2,
-                'P1_path': P1_name, 'P2_path': P2_name, 'K1': K1, 'K2': K2}
+                'P1_path': P1_name, 'P2_path': P2_name, 'K1': K1, 'K2': K2,
+                'C1':C1, 'C2':C2, 'F1': F1, 'F2': F2}
                 
 
     def __len__(self):

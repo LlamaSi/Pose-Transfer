@@ -10,7 +10,7 @@ MISSING_VALUE = -1
 # fix PATH
 img_dir  = '../fashion_data' #raw image path
 annotations_file = '../fashion_data/fasion-resize-annotation-train.csv' #pose annotation path
-save_path = '../fashion_data/train_kjson_zeronorm_10000' #path to store pose maps
+save_path = '../fashion_data/train_kjson_normzero' #path to store pose maps
 
 def pad_to_16x(x):
     if x % 16 > 0:
@@ -35,9 +35,7 @@ def trans_motion2d(motion2d):
     motion_proj = motion2d - centers
 
     # adding velocity
-    # velocity = np.c_[np.zeros((2, 1)), centers[:, 1:] - centers[:, :-1]].reshape(1, 2, -1)
-    # pdb.set_trace()
-    velocity = np.zeros(centers.shape)[np.newaxis, ...]
+    velocity = np.c_[np.zeros((2, 1)), centers[:, 1:] - centers[:, :-1]].reshape(1, 2, -1)
     motion_proj = np.r_[motion_proj[:8], motion_proj[9:], velocity]
 
     return motion_proj, centers
@@ -53,22 +51,10 @@ def normalize_motion(motion, mean_pose, std_pose):
 
 
 def preprocess_motion2d(motion, mean_pose, std_pose):
-    # pdb.set_trace()
-    ze = []
-    for i in range(motion.shape[0]):
-        if motion[i,0] == -2 or motion[i,1] == -2:
-            if i >= 9:
-                ze.append(i-1)
-            else:
-                ze.append(i)
-    # pdb.set_trace()
     motion, centers = trans_motion2d(motion)
-    motion[9:11] = -10000
-    motion[12:14] = -10000
-    for z in ze:
-        motion[z] = -10000
-    # print(motion)
     motion_trans = normalize_motion(motion, mean_pose, std_pose)
+    motion[9:11] = 0
+    motion[12:14] = 0
     motion_trans = motion_trans.reshape((-1, motion_trans.shape[-1]))
     return np.expand_dims(motion_trans, axis=0), centers
 
@@ -102,10 +88,8 @@ def compute_pose(annotations_file, savePath, sigma=6):
     for i in tqdm(range(cnt)):
         row = annotations_file.iloc[i]
         name = row.name
-        # if 'fashionMENTees_Tanksid0000039009_1front' in name:
         file_name = os.path.join(savePath, name + '.npy')
         motion = load_pose_cords_from_strings(row.keypoints_y, row.keypoints_x)
-        # print(motion)
         # pdb.set_trace()
         hip_motion = np.zeros([19,2])
         mid_hip = (motion[8] + motion[11]) / 2
@@ -125,7 +109,6 @@ def compute_pose(annotations_file, savePath, sigma=6):
         motion = np.expand_dims(motion, axis=2)
         input1, centers = preprocess_motion2d(motion, mean_pose, std_pose)
         # trans -> norm
-        # pdb.set_trace()
         d1 = {'input1':input1, 'centers': centers, 'face': face}
         # input2 = np.reshape(input1, (input1.shape[0], 15, 2, -1))
         # # norm 

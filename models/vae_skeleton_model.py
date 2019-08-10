@@ -31,11 +31,21 @@ def trans_motion_inv(motion, sx, sy, velocity=None):
     # seems like hip is the center, still need to check
     # motion_inv = torch.cat([motion[:,:8], torch.zeros((motion.shape[0], 1, 2, motion.shape[-1])).cuda(), motion[:,8:-1]], 1)
     motion_inv = motion[:,:-1]
-
+    
+    motion_inv = motion_inv[...,0]
     # restore centre position
-    motion_inv[:,:,0] += sx
-    motion_inv[:,:,1] += sy
-    return motion_inv[...,0]
+    for i in range(motion.shape[0]):
+        # pdb.set_trace()
+        # print(motion_inv[i])
+        for j in range(14):
+            if motion_inv[i,j,0] < -1000:
+                motion_inv[i,j] = -2
+            else:
+                motion_inv[i,j,0] = motion_inv[i,j,0] + sx[i]
+                motion_inv[i,j,1] = motion_inv[i,j,1] + sy[i]
+        # print(motion_inv[i])
+        # pdb.set_trace()
+    return motion_inv
 
 class Vae_Skeleton_Model(BaseModel):
     def name(self):
@@ -50,7 +60,7 @@ class Vae_Skeleton_Model(BaseModel):
         if not self.isTrain or opt.continue_train:
             which_epoch = opt.which_epoch
             self.load_network(self.vae_net, 'netSK', which_epoch)
-            self.vae_net.eval()
+        self.vae_net.eval()
         for param in self.vae_net.parameters():
             param.requires_grad = False
         # still need interpolation variables
@@ -70,7 +80,7 @@ class Vae_Skeleton_Model(BaseModel):
         motion_trans = motion_trans.reshape((-1, motion_trans.shape[-1]))
         return torch.Tensor(motion_trans).unsqueeze(0)
 
-    def forward(self, input1, input2):
+    def forward(self, input1, input2, center):
         m1 = self.vae_net.mot_encoder(input1)
         m2 = self.vae_net.mot_encoder(input2)
         b1 = self.vae_net.body_encoder(input1[:, :-2, :])
@@ -78,24 +88,20 @@ class Vae_Skeleton_Model(BaseModel):
         v2 = self.vae_net.view_encoder(input2[:, :-2, :])
 
         # may differ if we want more sequence
-        m_mix = (1 - self.alpha_m) * m1 + self.alpha_m * m2
-        v_mix = (1 - self.alpha_v) * v1 + self.alpha_v * v2
-
+        m_mix = (1 - (0.5+self.alpha_m)) * m1 + (0.5+self.alpha_m) * m2
+        v_mix = (1 - (0.5+self.alpha_m)) * v1 + (0.5+self.alpha_m) * v2
+        # m_mix = m2
+        # v_mix = v2
         # now get only one interpolation
         dec_input = torch.cat([m_mix, b1.repeat(1, 1, m1.shape[-1]), v_mix.repeat(1, 1, m1.shape[-1])], dim=1)
+        
         out = self.vae_net.decoder(dec_input)
         out = out.view((out.shape[0], 15, 2, -1))
         # check if still need mapping
         # post process
+        
         out = trans_motion_inv(normalize_motion_inv(out, self.mean_pose, 
-            self.std_pose), sx=self.w // 2, sy=self.h // 2)
+            self.std_pose), sx=center[:,0:1,0], sy=center[:,1:2,0])
         # print(out.shape) # (b, 14, 2)
 
-        return out
-
-
-    def postprocess_motion2d(self, motion, mean_pose, std_pose):
-        motion = motion.reshape(-1, 2, motion.shape[-1])
-        motion = trans_motion_inv(normalize_motion_inv(motion, self.mean_pose, 
-            self.std_pose), sx, sy)
-        return motion
+        return out / 2 # rescale

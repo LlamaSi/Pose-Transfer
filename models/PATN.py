@@ -125,12 +125,14 @@ class TransferModel(BaseModel):
         G_input = [self.input_P1,
                    torch.cat((self.input_BP1, self.input_BP2), 1)]
         self.fake_p2 = self.netG(G_input)
+        
         self.cpm_model.eval()
-        self.ds_BP2 = F.upsample(self.input_BP2, scale_factor=0.125)
-        # self.ds_BP2 = torch.nn.MaxPool2d(8,8)(self.input_BP2)
+        # self.ds_BP2 = F.upsample(self.input_BP2, scale_factor=0.125)
+        self.ds_BP2 = torch.nn.MaxPool2d(8,8)(self.input_BP2)
         
         _, _, _, _, _, heat6 = self.cpm_model(self.fake_p2, self.centermap)
         heat6 = heat6[:,1:] # 0 - 14
+        # pdb.set_trace()
         cores = [10,9,8,11,12,13,4,3,2,5,6,7,1]
         
         self.heat6 = torch.zeros(heat6.shape).cuda()
@@ -138,7 +140,7 @@ class TransferModel(BaseModel):
         for i in range(12):
             self.heat6[:,cores[i]] = heat6[:,i]
 
-        self.heat6 = self.heat6[:,:-2]
+        self.heat6 = self.heat6[:,2:]
 
     def test(self):
         with torch.no_grad():
@@ -208,6 +210,7 @@ class TransferModel(BaseModel):
             # if we have target results, then we can add L1 loss
             # either peceptual of normal L1
             if self.opt.L1_type == 'l1_plus_perL1' :
+                # print("self.opt.L1_type={}".format(self.opt.L1_type))
                 losses = self.criterionL1(self.fake_p2, self.input_P2)
                 self.loss_G_L1 = losses[0]
                 self.loss_originL1 = losses[1].item()
@@ -237,9 +240,10 @@ class TransferModel(BaseModel):
             # if compute pose loss
             t = Variable(self.ds_BP2[:, 2:14], requires_grad=False)
             # lambda_pose
-            heat_weight = 46 * 46 * 15 / 1.0
+            # heat_weight = 46 * 46 / 1.0
             pl = self.pose_loss(torch.clamp(self.heat6, min=0, max=1), t)*self.opt.lambda_pose
-            self.pl = pl*heat_weight
+            self.pl = pl
+            # print(self.pl)
 
         # just to assign the result for print error
         self.pair_L1loss = pair_L1loss.item()
@@ -251,8 +255,8 @@ class TransferModel(BaseModel):
             # if want to update G
             # add pose loss
             # pair loss is the total loss
-            # pair_loss += pl
-            pair_loss = pl
+            pair_loss += pl
+            # pair_loss = pl
             pair_loss.backward()
         else:
             # currently no pose loss for target
