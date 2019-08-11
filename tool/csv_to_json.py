@@ -10,7 +10,7 @@ MISSING_VALUE = -1
 # fix PATH
 img_dir  = '../fashion_data' #raw image path
 annotations_file = '../fashion_data/fasion-resize-annotation-train.csv' #pose annotation path
-save_path = '../fashion_data/train_kjson_zeronorm_10000' #path to store pose maps
+save_path = '../fashion_data/train_kjson_zeronorm_fashion' #path to store pose maps
 
 def pad_to_16x(x):
     if x % 16 > 0:
@@ -63,20 +63,21 @@ def preprocess_motion2d(motion, mean_pose, std_pose):
                 ze.append(i)
     # pdb.set_trace()
     motion, centers = trans_motion2d(motion)
-    motion[9:11] = -10000
-    motion[12:14] = -10000
+    motion[9:11] = 0
+    motion[12:14] = 0
     for z in ze:
-        motion[z] = -10000
-    # print(motion)
+        motion[z] = 0
+    pdb.set_trace()
     motion_trans = normalize_motion(motion, mean_pose, std_pose)
     motion_trans = motion_trans.reshape((-1, motion_trans.shape[-1]))
     return np.expand_dims(motion_trans, axis=0), centers
 
 def get_meanpose():
-    meanpose_path = '../mixamo_data/meanpose_with_view.npy'
-    stdpose_path = '../mixamo_data/stdpose_with_view.npy'
-    meanpose = np.load(meanpose_path)
-    stdpose = np.load(stdpose_path)
+    meanpose_path = '../deepfashion_meanpose_centered.npy'
+    stdpose_path = '../deepfashion_stdpose_centered.npy'
+    meanpose = np.load(meanpose_path)[:15]*2
+    # pdb.set_trace()
+    stdpose = np.load(stdpose_path)[:15]*2
     return meanpose, stdpose
 
 def normalize_motion_inv(motion, mean_pose, std_pose):
@@ -113,9 +114,9 @@ def compute_pose(annotations_file, savePath, sigma=6):
         hip_motion[:8] = motion[:8]
         hip_motion[9:] = motion[8:]
         
-        face = np.zeros([5,2])
-        face[0] = motion[0]
-        face[1:] = motion[14:]
+        face = np.zeros([6,2])
+        face[:2] = motion[:2]
+        face[-4:] = motion[14:]
         h1, w1, scale = pad_to_height(512, 256, 176)
         # pdb.set_trace()
         mean_pose, std_pose = get_meanpose()

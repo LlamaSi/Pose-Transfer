@@ -14,37 +14,49 @@ view_en_channels = [28, 32, 48, 64, 8]
 de_channels = [152, 128, 64, 30]
 
 def get_meanpose():
-    meanpose_path = './mixamo_data/meanpose_with_view.npy'
-    stdpose_path = './mixamo_data/stdpose_with_view.npy'
+    meanpose_path = './deepfashion_meanpose_centered.npy'
+    stdpose_path = './/deepfashion_stdpose_centered.npy'
+    meanfashion_path = './deepfashion_meanpose.npy'
 
-    meanpose = np.load(meanpose_path)
-    stdpose = np.load(stdpose_path)
+    meanpose = np.load(meanpose_path)[:15]*2
+    stdpose = np.load(stdpose_path)[:15]*2
+    meanpose_fashion = np.load(meanfashion_path)[:15]
 
-    return torch.Tensor(meanpose).cuda(), torch.Tensor(stdpose).cuda()
+    return torch.Tensor(meanpose).cuda(), torch.Tensor(stdpose).cuda(), torch.Tensor(meanpose_fashion).cuda()
 
 def normalize_motion_inv(motion, mean_pose, std_pose):
     if len(motion.shape) == 2:
         motion = motion.reshape(-1, 2, motion.shape[-1])
     return motion * std_pose.unsqueeze(2) + mean_pose.unsqueeze(2)
 
-def trans_motion_inv(motion, sx, sy, velocity=None):
-    # seems like hip is the center, still need to check
-    # motion_inv = torch.cat([motion[:,:8], torch.zeros((motion.shape[0], 1, 2, motion.shape[-1])).cuda(), motion[:,8:-1]], 1)
+def trans_motion_inv(motion, sx, sy,velocity=None):
+    # remove mid hip at the end
     motion_inv = motion[:,:-1]
     
     motion_inv = motion_inv[...,0]
-    # restore centre position
-    for i in range(motion.shape[0]):
-        # pdb.set_trace()
-        # print(motion_inv[i])
+    for i in range(4):
         for j in range(14):
-            if motion_inv[i,j,0] < -1000:
-                motion_inv[i,j] = -2
-            else:
-                motion_inv[i,j,0] = motion_inv[i,j,0] + sx[i]
-                motion_inv[i,j,1] = motion_inv[i,j,1] + sy[i]
-        # print(motion_inv[i])
-        # pdb.set_trace()
+            # if torch.abs(motion_inv[i,j,0]) > 0.0001 or torch.abs(motion_inv[i,j,1]) > 0.0001:
+                # pdb.set_trace()
+            motion_inv[i,j,0] += sx[i,0]
+            motion_inv[i,j,1] += sy[i,0]
+            # else:
+            #     motion_inv[i,j] += 2*mean_pose_fashion[j]
+    # restore centre position
+    # for i in range(motion.shape[0]):
+    #     # pdb.set_trace()
+    #     # print(motion_inv[i])
+    #     for j in range(8):
+    #         if torch.abs(motion_inv[i,j,0]) < 0.001:
+    #             motion_inv[i,j] = -2
+    #         else:
+    #             motion_inv[i,j,0] = motion_inv[i,j,0] + sx[i]
+    #             motion_inv[i,j,1] = motion_inv[i,j,1] + sy[i]
+    #     # print(motion_inv[i])
+    #     # pdb.set_trace()
+    # this is only for top training
+    motion_inv[:,9:11] = -2
+    motion_inv[:,12:14] = -2
     return motion_inv
 
 class Vae_Skeleton_Model(BaseModel):
@@ -71,14 +83,9 @@ class Vae_Skeleton_Model(BaseModel):
 
         # self.alpha_m.cuda()
         # self.alpha_v.cuda()
-        self.mean_pose, self.std_pose = get_meanpose()
+        self.mean_pose, self.std_pose, self.mean_pose_fashion = get_meanpose()
 
         self.w, self.h, self.scale = 352, 512, 2
-
-    def preprocess_motion2d(motion):
-        motion_trans = normalize_motion(trans_motion2d(motion), self.mean_pose, self.std_pose)
-        motion_trans = motion_trans.reshape((-1, motion_trans.shape[-1]))
-        return torch.Tensor(motion_trans).unsqueeze(0)
 
     def forward(self, input1, input2, center):
         m1 = self.vae_net.mot_encoder(input1)
@@ -90,8 +97,8 @@ class Vae_Skeleton_Model(BaseModel):
         # may differ if we want more sequence
         m_mix = (1 - (0.5+self.alpha_m)) * m1 + (0.5+self.alpha_m) * m2
         v_mix = (1 - (0.5+self.alpha_m)) * v1 + (0.5+self.alpha_m) * v2
-        # m_mix = m2
-        # v_mix = v2
+        # m_mix = 0.5*m1 + 0.5*m2
+        # v_mix = 0.5*v1 + 0.5*v2
         # now get only one interpolation
         dec_input = torch.cat([m_mix, b1.repeat(1, 1, m1.shape[-1]), v_mix.repeat(1, 1, m1.shape[-1])], dim=1)
         

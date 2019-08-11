@@ -16,7 +16,7 @@ class KeyDataset(BaseDataset):
         self.root = opt.dataroot
         self.dir_P = os.path.join(opt.dataroot, opt.phase) #person images
         self.dir_K = os.path.join(opt.dataroot, opt.phase + 'K') #keypoints
-        self.dir_json = os.path.join(opt.dataroot, opt.phase + '_kjson_zeronorm_10000') #keypoints
+        self.dir_json = os.path.join(opt.dataroot, opt.phase + '_kjson_zeronorm_fashion') #keypoints
 
         self.init_categories(opt.pairLst)
         self.transform = get_transform(opt)

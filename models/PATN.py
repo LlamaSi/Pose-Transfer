@@ -121,14 +121,14 @@ class TransferModel(BaseModel):
             self.input_P2 = self.input_P2.cuda()
             self.input_BP2 = self.input_BP2.cuda()
             
-    def forward(self):
+    def forward(self, input_BP_res):
         G_input = [self.input_P1,
                    torch.cat((self.input_BP1, self.input_BP2), 1)]
         self.fake_p2 = self.netG(G_input)
         
         self.cpm_model.eval()
         # self.ds_BP2 = F.upsample(self.input_BP2, scale_factor=0.125)
-        self.ds_BP2 = torch.nn.MaxPool2d(8,8)(self.input_BP2)
+        self.ds_BP2 = torch.nn.MaxPool2d(8,8)(input_BP_res)
         
         _, _, _, _, _, heat6 = self.cpm_model(self.fake_p2, self.centermap)
         heat6 = heat6[:,1:] # 0 - 14

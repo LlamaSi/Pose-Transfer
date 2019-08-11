@@ -69,7 +69,7 @@ class AugmentModel(BaseModel):
                     self.schedulers.append(networks.get_scheduler(optimizer, opt))
 
     def forward_aug(self, input):
-        # with mid hip at 8
+        # with mid hip at 15
         input1, input2 = input['K1'].squeeze(1), input['K2'].squeeze(1)
         F2 = input['F2'].cuda().float()
         # still need to preprocess, ie mean std
@@ -80,29 +80,39 @@ class AugmentModel(BaseModel):
         # 14, no mid hip
         BP_aug_kpts = self.skeleton_net(input1, input2, center)
         
-        nose = F2[:,0]
-        aug_nose = BP_aug_kpts[:,0]
-        eye_ears = F2[:,-4:]
+        # input22 = input2.view((input2.shape[0], 15, 2, -1))
+        # # check if still need mapping
+        # # post process
+
+        # BP_aug_kpts = trans_motion_inv(normalize_motion_inv(input22, self.skeleton_net.mean_pose, 
+        #     self.skeleton_net.std_pose), sx=center[:,0:1,0], sy=center[:,1:2,0]) / 2
+        # # print(out.shape) # (b, 14, 2)
+        neck = F2[:,1:2] #4,2
+        aug_neck = BP_aug_kpts[:,1:2] # 4,2
+        eye_ears = F2[:,2:] # 4, 4, 2
+        # print(neck, aug_neck, eye_ears)
+
+        aug_eye_ears = eye_ears - neck + aug_neck
+        # print(aug_eye_ears)
         
-        aug_eye_ears = eye_ears - nose + aug_nose
-
         BP_aug_kpts_full = torch.cat([BP_aug_kpts, aug_eye_ears], 1)
-
+        # pdb.set_trace()
         self.input_BP_aug = cords_to_map(BP_aug_kpts_full, (256, 176), sigma=3)
+        self.input_BP_res = cords_to_map(BP_aug_kpts_full, (256, 176), sigma=3*8).cuda()
 
-        # may add normal face based on the spline direction later
-        # self.input_BP_aug[:,14:] = input['BP2'][:,14:]
         for i in range(self.opt.batchSize):
             for j in range(4):
                 if eye_ears[i,j,0] == -1 or eye_ears[i,j,1] == -1:
                     self.input_BP_aug[i, j+14] = 0
-
+            if F2[i, 0, 0] == -1:
+                self.input_BP_aug[i,0] = 0
+        # pdb.set_trace()
         main_input = input.copy()
         main_input['BP2'] = self.input_BP_aug
 
         self.main_model.set_input(main_input)
         # get fake_b 
-        self.main_model.forward()
+        self.main_model.forward(self.input_BP_res)
         # should add skeleton loss inside main_model
 
         self.main_model.opt.with_D_PP = 1
