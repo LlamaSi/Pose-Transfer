@@ -69,20 +69,21 @@ class Vae_Skeleton_Model(BaseModel):
         self.vae_net = AutoEncoder3x(mot_en_channels, body_en_channels, 
             view_en_channels, de_channels)  
 
-        if not self.isTrain or opt.continue_train:
-            which_epoch = opt.which_epoch
-            self.load_network(self.vae_net, 'netSK', which_epoch)
-        self.vae_net.eval()
-        for param in self.vae_net.parameters():
-            param.requires_grad = False
-        # still need interpolation variables
-        # self.interpm = nn.Conv2d(2, 1, 1) 
-        # self.interpv = nn.Conv2d(2, 1, 1)
         self.alpha_m = Variable(torch.randn(1, device="cuda"), requires_grad=True)
         self.alpha_v = Variable(torch.randn(1, device="cuda"), requires_grad=True)
 
-        # self.alpha_m.cuda()
-        # self.alpha_v.cuda()
+        if not self.isTrain or opt.continue_train:
+            which_epoch = opt.which_epoch
+            self.load_network(self.vae_net, 'netSK', which_epoch)
+            self.save_path = os.path.join(self.save_dir, 'alphas.npy')
+            if os.path.exists(self.save_path):
+                self.alpha_m.data = torch.Tensor(np.load(self.save_path)).cuda().data
+                print(self.save_path)
+
+        self.vae_net.eval()
+        for param in self.vae_net.parameters():
+            param.requires_grad = False
+
         self.mean_pose, self.std_pose, self.mean_pose_fashion = get_meanpose()
 
         self.w, self.h, self.scale = 352, 512, 2
@@ -112,3 +113,8 @@ class Vae_Skeleton_Model(BaseModel):
         # print(out.shape) # (b, 14, 2)
 
         return out / 2 # rescale
+
+    def save(self, label):
+        if False:
+            self.save_network(self.vae_net,  'net_vae')
+        np.save(self.save_path, self.alpha_m.item())

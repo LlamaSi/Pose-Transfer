@@ -79,14 +79,6 @@ class AugmentModel(BaseModel):
         center = input['C2'].cuda().float()
         # 14, no mid hip
         BP_aug_kpts = self.skeleton_net(input1, input2, center)
-        
-        # input22 = input2.view((input2.shape[0], 15, 2, -1))
-        # # check if still need mapping
-        # # post process
-
-        # BP_aug_kpts = trans_motion_inv(normalize_motion_inv(input22, self.skeleton_net.mean_pose, 
-        #     self.skeleton_net.std_pose), sx=center[:,0:1,0], sy=center[:,1:2,0]) / 2
-        # # print(out.shape) # (b, 14, 2)
         neck = F2[:,1:2] #4,2
         aug_neck = BP_aug_kpts[:,1:2] # 4,2
         eye_ears = F2[:,2:] # 4, 4, 2
@@ -96,7 +88,7 @@ class AugmentModel(BaseModel):
         # print(aug_eye_ears)
         
         BP_aug_kpts_full = torch.cat([BP_aug_kpts, aug_eye_ears], 1)
-        # pdb.set_trace()
+        
         self.input_BP_aug = cords_to_map(BP_aug_kpts_full, (256, 176), sigma=3)
         self.input_BP_res = cords_to_map(BP_aug_kpts_full, (256, 176), sigma=3*8).cuda()
 
@@ -149,22 +141,24 @@ class AugmentModel(BaseModel):
         return fake_b
 
     def get_current_errors(self):
-        return self.main_model.get_current_errors()
+        return self.main_model.get_acc_error()
 
     def get_current_visuals(self):
         height, width = self.main_model.input_P1.size(2), self.main_model.input_P1.size(3)
         aug_pose = util.draw_pose_from_map(self.input_BP_aug.data)[0]
         part_vis = self.main_model.get_current_visuals()['vis']
         vis = np.zeros((height, width*7, 3)).astype(np.uint8) #h, w, c
+
+        fake_p2 = util.tensor2im(self.fake_aug.data)
         vis[:,:width*5,:] = part_vis
         vis[:,width*5:width*6,:] = aug_pose
-        vis[:,width*6:width*7,:] = self.fake_aug*256
+        vis[:,width*6:width*7,:] = fake_p2
 
         ret_visuals = OrderedDict([('vis', vis)])
         return ret_visuals
 
     def save(self, label):
-        self.save_network(self.skeleton_net, 'netSK', label, self.gpu_ids)
+        self.skeleton_net.save(label)
         self.main_model.save(label)
 
 

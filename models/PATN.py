@@ -109,6 +109,7 @@ class TransferModel(BaseModel):
             if opt.with_D_PP:
                 networks.print_network(self.netD_PP)
         print('-----------------------------------------------')
+        self.reset_acc()
 
     def set_input(self, input):
         self.input_P1, self.input_BP1 = input['P1'], input['BP1']
@@ -132,7 +133,6 @@ class TransferModel(BaseModel):
         
         _, _, _, _, _, heat6 = self.cpm_model(self.fake_p2, self.centermap)
         heat6 = heat6[:,1:] # 0 - 14
-        # pdb.set_trace()
         cores = [10,9,8,11,12,13,4,3,2,5,6,7,1]
         
         self.heat6 = torch.zeros(heat6.shape).cuda()
@@ -147,21 +147,6 @@ class TransferModel(BaseModel):
             G_input = [self.input_P1,
                        torch.cat((self.input_BP1, self.input_BP2), 1)]
             self.fake_p2 = self.netG(G_input)
-        # self.cpm_model.eval()
-        # # self.ds_BP2 = F.upsample(self.input_BP2, scale_factor=0.125)
-        # self.ds_BP2 = torch.nn.MaxPool2d(8,8)(self.input_BP2)
-        # self.ds_BP2 = self.ds_BP2.flatten(start_dim=2)
-        # # pdb.set_trace()
-        # _, _, _, _, _, heat6 = self.cpm_model(self.fake_p2, self.centermap)
-        # heat6 = heat6[:,1:]
-        # cores = [10,9,8,11,12,13,4,3,2,5,6,7,1]
-        
-        # self.heat6 = torch.zeros(heat6.shape).cuda()
-        # for i in range(13):
-        #     self.heat6[:,cores[i]] = heat6[:,i]
-
-        # self.heat6 = self.heat6.flatten(start_dim=2)
-
 
     # get image paths
     def get_image_paths(self):
@@ -197,14 +182,34 @@ class TransferModel(BaseModel):
         self.loss_D_PP = loss_D_PP.item()
 
     def backward_G(self, infer=False):
-        if self.opt.with_D_PB:
-            pred_fake_PB = self.netD_PB(torch.cat((self.fake_p2, self.input_BP2), 1))
-            self.loss_G_GAN_PB = self.criterionGAN(pred_fake_PB, True)
-
         if self.opt.with_D_PP:
             pred_fake_PP = self.netD_PP(torch.cat((self.fake_p2, self.input_P1), 1))
             self.loss_G_GAN_PP = self.criterionGAN(pred_fake_PP, True)
 
+        if self.opt.with_D_PB:
+            pred_fake_PB = self.netD_PB(torch.cat((self.fake_p2, self.input_BP2), 1))
+            self.loss_G_GAN_PB = self.criterionGAN(pred_fake_PB, True)
+
+        if self.opt.pose_loss:
+            # if compute pose loss
+            t = Variable(self.ds_BP2[:, 2:14], requires_grad=False)
+            pl = self.pose_loss(torch.clamp(self.heat6, min=0, max=1), t)*self.opt.lambda_pose
+        
+        if self.opt.with_D_PB:
+            pair_GANloss = self.loss_G_GAN_PB * self.opt.lambda_GAN
+            if self.opt.with_D_PP:
+                pair_GANloss += self.loss_G_GAN_PP * self.opt.lambda_GAN
+                pair_GANloss = pair_GANloss / 2
+        else:
+            if self.opt.with_D_PP:
+                pair_GANloss = self.loss_G_GAN_PP * self.opt.lambda_GAN
+
+        if not infer:
+            aug_loss = pair_GANloss + pl
+            self.acc_pl += pl
+            self.acc_aug_loss += aug_loss
+            aug_loss.backward()
+            return 
         # L1 loss
         if self.opt.L1_type != 'None':
             # if we have target results, then we can add L1 loss
@@ -222,28 +227,11 @@ class TransferModel(BaseModel):
             self.loss_G_L1 = Variable(torch.cuda.FloatTensor([0]))
 
         pair_L1loss = self.loss_G_L1
-        if self.opt.with_D_PB:
-            pair_GANloss = self.loss_G_GAN_PB * self.opt.lambda_GAN
-            if self.opt.with_D_PP:
-                pair_GANloss += self.loss_G_GAN_PP * self.opt.lambda_GAN
-                pair_GANloss = pair_GANloss / 2
-        else:
-            if self.opt.with_D_PP:
-                pair_GANloss = self.loss_G_GAN_PP * self.opt.lambda_GAN
 
         if self.opt.with_D_PB or self.opt.with_D_PP:
             pair_loss = pair_L1loss + pair_GANloss
         else:
             pair_loss = pair_L1loss
-
-        if self.opt.pose_loss:
-            # if compute pose loss
-            t = Variable(self.ds_BP2[:, 2:14], requires_grad=False)
-            # lambda_pose
-            # heat_weight = 46 * 46 / 1.0
-            pl = self.pose_loss(torch.clamp(self.heat6, min=0, max=1), t)*self.opt.lambda_pose
-            self.pl = pl
-            # print(self.pl)
 
         # just to assign the result for print error
         self.pair_L1loss = pair_L1loss.item()
@@ -251,17 +239,13 @@ class TransferModel(BaseModel):
         if self.opt.with_D_PB or self.opt.with_D_PP:
             self.pair_GANloss = pair_GANloss.item()
 
-        if not infer:
-            # if want to update G
-            # add pose loss
-            # pair loss is the total loss
-            pair_loss += pl
-            # pair_loss = pl
-            pair_loss.backward()
-        else:
-            # currently no pose loss for target
-            # pair_loss += pl
-            return pair_loss
+        self.acc_pair_L1loss += pair_L1loss.item()
+        self.acc_GAN_loss += pair_GANloss.item()
+
+        return pair_loss
+
+    def reset_acc(self):
+        self.acc_pl, self.acc_GAN_loss, self.acc_aug_loss, self.acc_pair_L1loss = 0,0,0,0
 
     def optimize_parameters(self):
         self.optimizer_G.zero_grad()
@@ -298,6 +282,16 @@ class TransferModel(BaseModel):
             ret_errors['perceptual'] = self.loss_perceptual
         ret_errors['pose_loss'] = self.pl
 
+        return ret_errors
+
+    def get_acc_error(self):
+        ret_errors = OrderedDict([ ('pair_L1loss', self.acc_pair_L1loss / self.opt.display_freq)])
+        if self.opt.with_D_PB or self.opt.with_D_PP:
+            ret_errors['pair_GANloss'] = self.acc_GAN_loss /self.opt.display_freq
+        ret_errors['aug_loss'] = self.acc_aug_loss /self.opt.display_freq
+        ret_errors['acc_pl'] = self.acc_pl / self.opt.display_freq
+
+        self.reset_acc()
         return ret_errors
 
     def get_current_visuals(self):
