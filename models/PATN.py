@@ -296,6 +296,7 @@ class TransferModel(BaseModel):
 
     def get_current_visuals(self):
         height, width = self.input_P1.size(2), self.input_P1.size(3)
+        # pdb.set_trace()
         input_P1 = util.tensor2im(self.input_P1.data)
         input_P2 = util.tensor2im(self.input_P2.data)
 

@@ -12,6 +12,7 @@ from losses.L1_plus_perceptualLoss import L1_plus_perceptualLoss
 import numpy as np
 
 from . import xyz_to_anglelimb
+import torch.nn.functional as F
 from .vae_skeleton_model import Vae_Skeleton_Model, trans_motion_inv, normalize_motion_inv
 import matplotlib.pyplot as plt
 import pdb
@@ -147,13 +148,20 @@ class AugmentModel(BaseModel):
         height, width = self.main_model.input_P1.size(2), self.main_model.input_P1.size(3)
         aug_pose = util.draw_pose_from_map(self.input_BP_aug.data)[0]
         part_vis = self.main_model.get_current_visuals()['vis']
-        vis = np.zeros((height, width*7, 3)).astype(np.uint8) #h, w, c
+        vis = np.zeros((height, width*8, 3)).astype(np.uint8) #h, w, c
 
-        fake_p2 = util.tensor2im(self.fake_aug.data)
         vis[:,:width*5,:] = part_vis
         vis[:,width*5:width*6,:] = aug_pose
-        vis[:,width*6:width*7,:] = fake_p2
+        vis[:,width*6:width*7,:] = ((self.fake_aug + 1) / 2.0 * 255).astype(np.uint8)
 
+        heatmap = F.upsample(self.main_model.heat6, scale_factor=8)
+        heatmap = torch.cat([torch.zeros([self.opt.batchSize, 2, 256, 176]).cuda(), heatmap], 1)
+        heatmap = heatmap.data
+        vis[:,width*7:width*8,:] = util.draw_pose_from_map(heatmap.data)[0]
+        
+        # for i in range(12):
+        #     plt.imshow(heatmap[i])
+        #     plt.show()
         ret_visuals = OrderedDict([('vis', vis)])
         return ret_visuals
 

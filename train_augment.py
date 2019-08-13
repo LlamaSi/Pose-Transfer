@@ -32,7 +32,7 @@ for epoch in range(opt.epoch_count, opt.niter + opt.niter_decay + 1):
             save_result = total_steps % opt.update_html_freq == 0
             visualizer.display_current_results(aug_model.get_current_visuals(), epoch, save_result)
             print(aug_model.skeleton_net.alpha_m, aug_model.skeleton_net.alpha_v)
-            print(aug_model.skeleton_net.alpha_m.grad, aug_model.skeleton_net.alpha_v.grad)
+            # print(aug_model.skeleton_net.alpha_m.grad, aug_model.skeleton_net.alpha_v.grad)
             # for name, param in aug_model.main_model.named_parameters():
             #     # print(name) netD_PB.model.1.bias netD_PP.model.1.bias
             #     if 'netD_PB.model.1.bias' in name:

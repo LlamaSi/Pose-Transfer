@@ -34,10 +34,11 @@ LABELS = ['nose', 'neck', 'Rsho', 'Relb', 'Rwri', 'Lsho', 'Lelb', 'Lwri',
 
 MISSING_VALUE = -1
 
-def map_to_cord(pose_map, threshold=0.1):
+def map_to_cord(pose_map, threshold=0.001):
     all_peaks = [[] for i in range(18)]
     pose_map = pose_map[..., :18]
-
+    # import pdb
+    # pdb.set_trace()
     y, x, z = np.where(np.logical_and(pose_map == pose_map.max(axis = (0, 1)),
                                      pose_map > threshold))
     for x_i, y_i, z_i in zip(x, y, z):
@@ -56,7 +57,7 @@ def map_to_cord(pose_map, threshold=0.1):
 
     return np.concatenate([np.expand_dims(y_values, -1), np.expand_dims(x_values, -1)], axis=1)
 
-def draw_pose_from_map(pose_map, threshold=0.1, **kwargs):
+def draw_pose_from_map(pose_map, threshold=0.001, **kwargs):
     # CHW -> HCW -> HWC
     pose_map = pose_map[0].cpu().transpose(1, 0).transpose(2, 1).numpy()
 

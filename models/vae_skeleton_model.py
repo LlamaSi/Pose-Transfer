@@ -40,24 +40,23 @@ def trans_motion_inv(motion, sx, sy,velocity=None):
                 # pdb.set_trace()
             motion_inv[i,j,0] += sx[i,0]
             motion_inv[i,j,1] += sy[i,0]
-            # else:
-            #     motion_inv[i,j] += 2*mean_pose_fashion[j]
-    # restore centre position
-    # for i in range(motion.shape[0]):
-    #     # pdb.set_trace()
-    #     # print(motion_inv[i])
-    #     for j in range(8):
-    #         if torch.abs(motion_inv[i,j,0]) < 0.001:
-    #             motion_inv[i,j] = -2
-    #         else:
-    #             motion_inv[i,j,0] = motion_inv[i,j,0] + sx[i]
-    #             motion_inv[i,j,1] = motion_inv[i,j,1] + sy[i]
-    #     # print(motion_inv[i])
-    #     # pdb.set_trace()
-    # this is only for top training
+
     motion_inv[:,9:11] = -2
     motion_inv[:,12:14] = -2
     return motion_inv
+
+class Interpolate_Net(BaseModel):
+    def name(self):
+        return 'Interpolate_Net'
+
+    def __init__(self):
+        super(Interpolate_Net, self).__init__()
+        self.fc1 = nn.Linear(28 * 28, 200)
+        self.fc2 = nn.Linear(200, 200)
+        self.fc3 = nn.Linear(200, 10)
+
+    def forward(self, input):
+        pass
 
 class Vae_Skeleton_Model(BaseModel):
     def name(self):
@@ -97,7 +96,7 @@ class Vae_Skeleton_Model(BaseModel):
 
         # may differ if we want more sequence
         m_mix = (1 - (0.5+self.alpha_m)) * m1 + (0.5+self.alpha_m) * m2
-        v_mix = (1 - (0.5+self.alpha_m)) * v1 + (0.5+self.alpha_m) * v2
+        v_mix = (1 - (0.5+self.alpha_v)) * v1 + (0.5+self.alpha_v) * v2
         # m_mix = 0.5*m1 + 0.5*m2
         # v_mix = 0.5*v1 + 0.5*v2
         # now get only one interpolation
@@ -117,4 +116,5 @@ class Vae_Skeleton_Model(BaseModel):
     def save(self, label):
         if False:
             self.save_network(self.vae_net,  'net_vae')
-        np.save(self.save_path, self.alpha_m.item())
+        alphas = {'m': self.alpha_m.item(), 'v': self.alpha_v.item()}
+        np.save(self.save_path, alphas)

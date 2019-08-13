@@ -26,7 +26,7 @@ LABELS = ['nose', 'neck', 'Rsho', 'Relb', 'Rwri', 'Lsho', 'Lelb', 'Lwri',
 MISSING_VALUE = -1
 
 
-def map_to_cord(pose_map, threshold=0.1):
+def map_to_cord(pose_map, threshold=0.0001):
     all_peaks = [[] for i in range(18)]
     pose_map = pose_map[..., :18]
 
