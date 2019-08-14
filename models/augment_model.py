@@ -61,6 +61,7 @@ class AugmentModel(BaseModel):
 
                 # initialize optimizers
                 self.optimizer_SK = torch.optim.Adam([self.skeleton_net.alpha_m, self.skeleton_net.alpha_v], lr=self.skeleton_lr , betas=(opt.beta2, 0.999))
+                # self.optimizer_SK = torch.optim.Adam(self.skeleton_net.alphas_m.parameters(), lr=self.skeleton_lr, betas=(opt.beta1, 0.999))
 
                 # need to check whether parameter contains abundant ones
                 self.optimizers.append(self.optimizer_SK)
@@ -99,7 +100,7 @@ class AugmentModel(BaseModel):
                     self.input_BP_aug[i, j+14] = 0
             if F2[i, 0, 0] == -1:
                 self.input_BP_aug[i,0] = 0
-        # pdb.set_trace()
+        
         main_input = input.copy()
         main_input['BP2'] = self.input_BP_aug
 
@@ -108,7 +109,7 @@ class AugmentModel(BaseModel):
         self.main_model.forward(self.input_BP_res)
         # should add skeleton loss inside main_model
 
-        self.main_model.opt.with_D_PP = 1
+        self.main_model.opt.with_D_PP = self.opt.poseGAN
         self.main_model.opt.with_D_PB = 0
         self.main_model.opt.L1_type = 'None'
 
@@ -155,6 +156,7 @@ class AugmentModel(BaseModel):
         vis[:,width*6:width*7,:] = ((self.fake_aug + 1) / 2.0 * 255).astype(np.uint8)
 
         heatmap = F.upsample(self.main_model.heat6, scale_factor=8)
+        # pdb.set_trace()
         heatmap = torch.cat([torch.zeros([self.opt.batchSize, 2, 256, 176]).cuda(), heatmap], 1)
         heatmap = heatmap.data
         vis[:,width*7:width*8,:] = util.draw_pose_from_map(heatmap.data)[0]

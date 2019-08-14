@@ -195,6 +195,7 @@ class TransferModel(BaseModel):
             t = Variable(self.ds_BP2[:, 2:14], requires_grad=False)
             pl = self.pose_loss(torch.clamp(self.heat6, min=0, max=1), t)*self.opt.lambda_pose
         
+        pair_GANloss = torch.zeros(1).cuda()
         if self.opt.with_D_PB:
             pair_GANloss = self.loss_G_GAN_PB * self.opt.lambda_GAN
             if self.opt.with_D_PP:
@@ -208,6 +209,7 @@ class TransferModel(BaseModel):
             aug_loss = pair_GANloss + pl
             self.acc_pl += pl
             self.acc_aug_loss += aug_loss
+            self.acc_pose_gan_loss += pair_GANloss.item()
             aug_loss.backward()
             return 
         # L1 loss
@@ -239,13 +241,14 @@ class TransferModel(BaseModel):
         if self.opt.with_D_PB or self.opt.with_D_PP:
             self.pair_GANloss = pair_GANloss.item()
 
-        self.acc_pair_L1loss += pair_L1loss.item()
         self.acc_GAN_loss += pair_GANloss.item()
+        self.acc_pair_L1loss += pair_L1loss.item()
 
         return pair_loss
 
     def reset_acc(self):
         self.acc_pl, self.acc_GAN_loss, self.acc_aug_loss, self.acc_pair_L1loss = 0,0,0,0
+        self.acc_pose_gan_loss = 0
 
     def optimize_parameters(self):
         self.optimizer_G.zero_grad()
@@ -285,11 +288,12 @@ class TransferModel(BaseModel):
         return ret_errors
 
     def get_acc_error(self):
-        ret_errors = OrderedDict([ ('pair_L1loss', self.acc_pair_L1loss / self.opt.display_freq)])
+        ret_errors = OrderedDict([ ('pair_L1loss', self.acc_pair_L1loss / self.opt.print_freq)])
         if self.opt.with_D_PB or self.opt.with_D_PP:
-            ret_errors['pair_GANloss'] = self.acc_GAN_loss /self.opt.display_freq
-        ret_errors['aug_loss'] = self.acc_aug_loss /self.opt.display_freq
-        ret_errors['acc_pl'] = self.acc_pl / self.opt.display_freq
+            ret_errors['pair_GANloss'] = self.acc_GAN_loss /self.opt.print_freq
+        ret_errors['aug_loss'] = self.acc_aug_loss /self.opt.print_freq
+        ret_errors['acc_pl'] = self.acc_pl / self.opt.print_freq
+        ret_errors['pose_GANloss'] = self.acc_pose_gan_loss / self.opt.print_freq
 
         self.reset_acc()
         return ret_errors
